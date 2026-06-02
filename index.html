@@ -376,8 +376,8 @@ const fmtCNPJ = v => { const d=String(v||'').replace(/\D/g,''); return d.length=
 const fmtDate = s => { if(!s) return ''; const d=new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}); };
 const setStatus = (kind, msg) => { const p=$('#status-pill'); p.className=`status-pill ${kind||''}`; $('#status-text').textContent=msg; };
 
-// Initialize date end
-$('#cfg-end').value = new Date().toISOString().slice(0,10);
+// Initialize date end — usa timezone local (não UTC) pra evitar off-by-one no fim do dia em BRT
+$('#cfg-end').value = new Date().toLocaleDateString('en-CA');  // en-CA → YYYY-MM-DD
 
 // Pre-filled credentials (Roger 27/05)
 const CREDS = {
@@ -423,7 +423,16 @@ async function authenticate() {
     STATE.token = {...data, expires_at: Date.now() + (data.expires_in||3600)*1000};
     STATE.companies = (data.companies||[]).sort((a,b)=>(a.id||'').localeCompare(b.id||''));
     STATE.scope = data.scope || [];
-    setStatus('ok', `✓ Autenticado · ${STATE.companies.length} empresas`);
+    // Audit: verifica se todas as 11 empresas esperadas (CLIENT_MAP) foram retornadas
+    const expectedIds = Object.keys(CLIENT_MAP);
+    const returnedIds = new Set(STATE.companies.map(c=>c.id));
+    const missing = expectedIds.filter(id => !returnedIds.has(id));
+    if (missing.length > 0) {
+      const missingLabels = missing.map(id => `${CLIENT_MAP[id].alias} (${CLIENT_MAP[id].label})`).join(', ');
+      console.warn('⚠️ EMPRESAS FALTANDO na resposta de auth:', missingLabels);
+      toast(`⚠️ Auth retornou ${STATE.companies.length}/${expectedIds.length} empresas. Faltando: ${missingLabels}`, 'warn');
+    }
+    setStatus('ok', `✓ Autenticado · ${STATE.companies.length} empresas${missing.length>0?` (${missing.length} faltando)`:''}`);
     return true;
   } catch(e) {
     setStatus('err', `Auth falhou: ${e.message}`);
@@ -460,6 +469,18 @@ async function runWithRetry(item, maxRetries=3) {
   let lastErr = null;
   for (let attempt=0; attempt<=maxRetries; attempt++) {
     const t0 = performance.now();
+    // Token refresh mid-flight: se o token expirou (ou está prestes), reautentica
+    if (!STATE.token || Date.now() > STATE.token.expires_at - 60000) {
+      console.warn('Token expirado/expirando mid-extract → reautenticando');
+      const ok = await authenticate();
+      if (!ok) {
+        STATE.errors.push({ ep:item.ep, url:item.url, status:401, message:'Token expirado e re-auth falhou', company:item.company });
+        STATE.failedItems.push(item);
+        logLine({status:401, url:item.url, ms:0, ep:item.ep, label:label(item), message:'token expirado · re-auth falhou', attempt});
+        bumpCounter('other');
+        return {ok:false, status:401};
+      }
+    }
     // AbortController com timeout de 5min (suporta respostas grandes tipo 11k transações ~22s)
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 5 * 60 * 1000);
@@ -478,6 +499,13 @@ async function runWithRetry(item, maxRetries=3) {
       // Success: ingest
       if (r.status === 200 && json) {
         ingestSuccess(item, json);
+        // PAGINAÇÃO: detecta se a Vólus paginou e estamos perdendo dados silenciosamente
+        const data = json.data || json;
+        const pagiKeys = ['next_page','next_url','has_more','has_next','total_pages','total_count','total','pagination','links','_links','meta','page','offset','limit'].filter(k => data[k] !== undefined || json[k] !== undefined);
+        if (pagiKeys.length > 0) {
+          console.warn('⚠️ POSSÍVEL PAGINAÇÃO detectada para', item.url, '— keys:', pagiKeys, '— amostra:', pagiKeys.map(k => ({[k]: data[k] ?? json[k]})));
+          logLine({status:200, url:item.url, ms, ep:item.ep, label:label(item), message:`⚠️ pagi-keys: ${pagiKeys.join(',')}`, attempt, isRetry:false});
+        }
         logLine({status:200, url:item.url, ms, ep:item.ep, label:label(item), txCount:countTx(item.ep,json), attempt});
         bumpCounter('ok');
         return {ok:true, status:200};
@@ -681,7 +709,7 @@ const COLS = {
     {k:'_date', t:'Data', val:r=>r.transaction_datetime?new Date(r.transaction_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r.transaction_datetime?new Date(r.transaction_datetime).getTime():0, render:r=>fmtDate(r.transaction_datetime), cls:'mono'},
     {k:'order_id', t:'Ordem', val:r=>r.order_id, cls:'mono strong'},
     {k:'_empresa', t:'Empresa', val:r=>r._company?.name||''},
-    {k:'plate', t:'Placa', val:r=>r.card?.plate, cls:'mono'},
+    {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono'},
     {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
     {k:'operator', t:'Operador', val:r=>r.operator?.name},
     {k:'merchant', t:'Oficina', val:r=>r.merchant?.name, cls:'strong'},
@@ -693,7 +721,7 @@ const COLS = {
     {k:'total', t:'Total', val:r=>(r.products||[]).reduce((s,p)=>s+scaled(p.total_value),0), render:r=>fmtBRL((r.products||[]).reduce((s,p)=>s+scaled(p.total_value),0)), cls:'num', total:true},
     {k:'items', t:'Itens', val:r=>(r.products||[]).length, cls:'num'},
     {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
-    {k:'unit', t:'Unidade', val:r=>r.unit?.name},
+    {k:'unit', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
   ],
   credit: [
     {k:'_date', t:'Data', val:r=>r.date?new Date(r.date).toLocaleDateString('pt-BR'):'', sortVal:r=>r.date?new Date(r.date).getTime():0, render:r=>fmtDate(r.date), cls:'mono'},
@@ -765,7 +793,7 @@ function renderAll() {
 function renderKpis() {
   const totalFuelR = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
   const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
-  const totalCreditR = STATE.results.credit.reduce((s,t)=>s+nz(t.amount),0);
+  const totalCreditR = STATE.results.credit.reduce((s,t)=>s+scaled(t.amount),0);
   const elapsed = STATE.finishedAt ? ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1) : '—';
   const items = [
     {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:fmtBRL(totalFuelR), cls: STATE.results.fuel.length>0?'ok':''},
