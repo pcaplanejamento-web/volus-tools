@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Volus → Excel · Extração + Planilha em 1 clique</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #EEF2F8;
+  --bg-grad: radial-gradient(1200px 600px at 8% -10%, rgba(67,97,238,.10), transparent 60%),
+             radial-gradient(900px 500px at 100% 0%, rgba(149,168,255,.10), transparent 55%),
+             linear-gradient(180deg, #f6f8fc 0%, #EEF2F8 100%);
+  --surface: rgba(255,255,255,.85);
+  --surface-elev: #ffffff;
+  --surface-sub: rgba(248,250,255,.7);
+  --text: #1A1F36;
+  --text-strong: #0f172a;
+  --text-mute: #5F6B7A;
+  --text-sub: #94a3b8;
+  --accent: #4361ee;
+  --accent-strong: #3651cc;
+  --accent-bg: rgba(67,97,238,.10);
+  --accent-bg-sub: rgba(67,97,238,.06);
+  --accent-bd: rgba(67,97,238,.22);
+  --border: rgba(63,81,181,.14);
+  --border-sub: rgba(63,81,181,.08);
+  --ok: #16a34a; --ok-bg: rgba(22,163,74,.10);
+  --err: #dc2626; --err-bg: rgba(220,38,38,.10);
+  --warn: #f59e0b; --warn-bg: rgba(245,158,11,.12);
+  --excel: #21a366;
+  --r: 10px;
+  --r-lg: 14px;
+  --shadow: 0 4px 10px -2px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
+  --shadow-lg: 0 12px 28px -6px rgba(15,23,42,.14);
+  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono", monospace;
+}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:var(--font);color:var(--text);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer;border:0}
+input,select,textarea{font:inherit;color:inherit}
+code,pre,.mono{font-family:var(--mono)}
+.app{max-width:980px;margin:0 auto;padding:18px 24px 60px}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:14px;padding:14px 20px;background:var(--surface-elev);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text-strong)}
+.brand-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--accent) 0%,var(--excel) 100%);border-radius:9px;display:grid;place-items:center;color:white;font-weight:800;font-size:16px;box-shadow:0 4px 12px -2px rgba(67,97,238,.5)}
+.brand-sub{color:var(--text-mute);font-weight:500;font-size:12px;margin-left:4px}
+.spacer{flex:1}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text-mute)}
+.status-pill.ok{background:var(--ok-bg);color:var(--ok);border-color:rgba(22,163,74,.25)}
+.status-pill.err{background:var(--err-bg);color:var(--err);border-color:rgba(220,38,38,.25)}
+.status-pill.warn{background:var(--warn-bg);color:var(--warn);border-color:rgba(245,158,11,.3)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1}
+.status-pill.ok .status-dot{background:var(--ok);box-shadow:0 0 0 4px rgba(22,163,74,.18)}
+.status-pill.err .status-dot{background:var(--err)}
+.status-pill.warn .status-dot{background:var(--warn)}
+
+/* STEPS */
+.step{background:var(--surface-elev);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;transition:opacity .2s}
+.step.disabled{opacity:.55;pointer-events:none}
+.step-h{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border-sub)}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;display:grid;place-items:center;font-size:13px;flex-shrink:0}
+.step.done .step-num{background:var(--ok);color:white}
+.step-title{font-weight:600;color:var(--text-strong);flex:1}
+.step-meta{font-size:11px;color:var(--text-mute);font-variant-numeric:tabular-nums}
+.step-body{padding:16px 18px}
+
+/* FIELDS */
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);font-weight:600}
+.field input,.field textarea{padding:8px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-sub);font-family:var(--mono);font-size:12px;color:var(--text)}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg-sub)}
+.field .hint{font-size:11px;color:var(--text-sub);margin-top:2px}
+.row{display:flex;gap:12px}.row > *{flex:1}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;transition:all .15s}
+.btn:hover:not(:disabled){background:var(--accent-bg-sub);border-color:var(--accent-bd)}
+.btn.primary{background:var(--accent);color:white;border-color:var(--accent);box-shadow:0 2px 6px -1px rgba(67,97,238,.4)}
+.btn.primary:hover:not(:disabled){background:var(--accent-strong);border-color:var(--accent-strong)}
+.btn.excel{background:var(--excel);color:white;border-color:var(--excel);box-shadow:0 2px 8px -1px rgba(33,163,102,.45)}
+.btn.excel:hover:not(:disabled){background:#1a8552;border-color:#1a8552}
+.btn.big{padding:14px 28px;font-size:15px;font-weight:600;width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:11px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* COMPANIES LIST */
+.checkbox-list{padding:0;margin:0;list-style:none;max-height:280px;overflow-y:auto;border:1px solid var(--border-sub);border-radius:var(--r);background:var(--surface-sub)}
+.checkbox-list li{padding:8px 12px;border-bottom:1px solid var(--border-sub);font-size:12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.checkbox-list li:last-child{border-bottom:0}
+.checkbox-list li:hover{background:var(--accent-bg-sub)}
+.checkbox-list li input{margin:0;cursor:pointer}
+.checkbox-list .name{font-weight:600;color:var(--text-strong);flex:1}
+.checkbox-list .meta{font-family:var(--mono);color:var(--text-mute);font-size:11px}
+.controls-row{display:flex;gap:8px;font-size:11px;margin-bottom:8px}
+.controls-row button{padding:3px 10px;font-size:11px;background:var(--surface);color:var(--accent);border:1px solid var(--border);border-radius:6px}
+.controls-row button:hover{background:var(--accent-bg-sub)}
+
+/* AUTH INFO */
+.auth-info{margin-top:10px;padding:10px 12px;border-radius:var(--r);background:var(--ok-bg);border:1px solid rgba(22,163,74,.25);font-size:12px;color:var(--ok);display:none}
+.auth-info.show{display:block}
+.auth-info.err{background:var(--err-bg);border-color:rgba(220,38,38,.25);color:var(--err)}
+.auth-info strong{color:inherit}
+
+/* PROGRESS */
+.progress-bar{height:8px;background:var(--surface-sub);border-radius:4px;overflow:hidden;border:1px solid var(--border-sub);margin-bottom:8px}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent) 0%,var(--excel) 100%);transition:width .3s ease;border-radius:4px}
+.progress-stats{display:flex;gap:14px;font-size:11px;color:var(--text-mute);flex-wrap:wrap}
+.progress-stats strong{color:var(--text-strong);font-family:var(--mono)}
+
+.log{max-height:240px;overflow-y:auto;padding:8px;background:#0f172a;border-radius:var(--r);font-family:var(--mono);font-size:11px;line-height:1.5;color:#cbd5e1;margin-top:10px}
+.log-line{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center}
+.log-line .ts{color:#64748b}
+.log-line .stat{font-weight:700;width:36px;text-align:center;border-radius:3px;padding:1px 0;font-size:10px}
+.log-line .stat.s2{background:rgba(22,163,74,.18);color:#86efac}
+.log-line .stat.s4{background:rgba(220,38,38,.18);color:#fca5a5}
+.log-line .stat.s5{background:rgba(220,38,38,.18);color:#fca5a5}
+.log-line .stat.s0{background:rgba(148,163,184,.15);color:#cbd5e1}
+.log-line .url{color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log-line .info{color:#7dd3fc;text-align:right;font-size:10px}
+
+/* RESUME */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface-sub);border:1px solid var(--border-sub);border-radius:var(--r);padding:10px 14px}
+.kpi .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);font-weight:600;margin-bottom:3px}
+.kpi .value{font-size:18px;font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:11px;color:var(--text-mute);margin-top:2px}
+
+/* HERO BUTTON */
+.hero{padding:20px;text-align:center;background:linear-gradient(135deg,rgba(33,163,102,.05) 0%,rgba(67,97,238,.05) 100%);border-radius:var(--r-lg);border:1px solid var(--border-sub);margin-bottom:8px}
+.hero h3{margin:0 0 4px;color:var(--text-strong);font-size:14px}
+.hero p{margin:0 0 14px;color:var(--text-mute);font-size:12px}
+
+/* TOAST */
+.toast-host{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{background:white;border:1px solid var(--border);border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;box-shadow:var(--shadow);font-size:13px;max-width:380px;animation:slide .25s ease-out}
+.toast.err{border-left-color:var(--err)}
+.toast.ok{border-left-color:var(--ok)}
+@keyframes slide{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">⬇</div>
+      <span>Volus → Excel</span>
+      <span class="brand-sub">Extração + Planilha multi-aba em 1 clique</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-text">Aguardando</span></span>
+  </header>
+
+  <!-- STEP 1: AUTH -->
+  <section class="step" id="step1">
+    <div class="step-h">
+      <span class="step-num">1</span>
+      <span class="step-title">Autenticar</span>
+      <span class="step-meta" id="step1-meta">credenciais do Roger pré-preenchidas</span>
+    </div>
+    <div class="step-body">
+      <div class="row">
+        <div class="field">
+          <label>Client ID</label>
+          <input id="auth-cid" value="52cb732b-d904-0aa0-e063-326fa8c0d811" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label>Client Secret</label>
+          <input id="auth-secret" value="A723A490C3882C7DFC8E698CE3345BBE" spellcheck="false" />
+        </div>
+      </div>
+      <button class="btn primary" id="btn-auth" style="width:100%">Autenticar</button>
+      <div class="auth-info" id="auth-info"></div>
+    </div>
+  </section>
+
+  <!-- STEP 2: CONFIG -->
+  <section class="step disabled" id="step2">
+    <div class="step-h">
+      <span class="step-num">2</span>
+      <span class="step-title">Período + Empresas</span>
+      <span class="step-meta" id="step2-meta">—</span>
+    </div>
+    <div class="step-body">
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label>Data início</label>
+          <input id="cfg-start" type="date" value="2026-01-01" />
+        </div>
+        <div class="field">
+          <label>Data fim</label>
+          <input id="cfg-end" type="date" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Empresas (<span id="companies-count">0</span> selecionadas)</label>
+        <div class="controls-row">
+          <button id="select-all-comp">Marcar todas</button>
+          <button id="deselect-all-comp">Desmarcar</button>
+          <button id="select-617">Só 617-* (Abastecimento)</button>
+          <button id="select-600">Só 600-* (Manutenção)</button>
+        </div>
+        <ul class="checkbox-list" id="companies-list"></ul>
+      </div>
+      <div class="field">
+        <label>card_ids para /v1/credit-card/statement <span style="color:var(--text-sub);text-transform:none">(opcional — um por linha)</span></label>
+        <textarea id="card-ids" rows="2" placeholder="Deixe vazio se não tem cartões de crédito" style="font-family:var(--mono);font-size:11px"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: EXTRACT + EXCEL -->
+  <section class="step disabled" id="step3">
+    <div class="step-h">
+      <span class="step-num">3</span>
+      <span class="step-title">Extrair e gerar planilha XLSX</span>
+      <span class="step-meta" id="step3-meta">—</span>
+    </div>
+    <div class="step-body">
+      <div class="hero">
+        <h3>Pronto pra extrair</h3>
+        <p>Vai chamar todos os endpoints em paralelo e gerar planilha Excel multi-aba.</p>
+        <button class="btn excel big" id="btn-extract">▶ EXTRAIR E GERAR XLSX</button>
+      </div>
+      <div id="progress-area" style="display:none;margin-top:14px">
+        <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
+        <div class="progress-stats">
+          <span>Feitas: <strong id="ps-done">0</strong>/<strong id="ps-total">0</strong></span>
+          <span>200 OK: <strong id="ps-ok" style="color:var(--ok)">0</strong></span>
+          <span>403: <strong id="ps-403" style="color:var(--err)">0</strong></span>
+          <span>404: <strong id="ps-404" style="color:var(--warn)">0</strong></span>
+          <span>Outros: <strong id="ps-other">0</strong></span>
+          <span style="margin-left:auto">Transações: <strong id="ps-tx">0</strong></span>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4: DOWNLOAD -->
+  <section class="step disabled" id="step4">
+    <div class="step-h">
+      <span class="step-num">4</span>
+      <span class="step-title">Baixar planilha</span>
+      <span class="step-meta" id="step4-meta">—</span>
+    </div>
+    <div class="step-body">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="btn-row" style="justify-content:center;margin-top:10px">
+        <button class="btn excel big" id="btn-download" style="width:auto">⬇ Baixar planilha.xlsx</button>
+        <button class="btn" id="btn-download-json">⬇ JSON</button>
+        <button class="btn" id="btn-restart">↻ Nova extração</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast-host" id="toast-host"></div>
+
+<script>
+'use strict';
+
+const STATE = {
+  token: null,
+  companies: [],
+  scope: [],
+  selectedCompanyIds: new Set(),
+  results: { fuel: [], maint: [], credit: [], aircrafts: [] },
+  errors: [],
+  startedAt: null,
+  finishedAt: null,
+};
+
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const toast = (msg, kind='') => {
+  const t = document.createElement('div');
+  t.className = `toast ${kind}`;
+  t.textContent = msg;
+  $('#toast-host').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+};
+const escapeHtml = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const nz = v => +v || 0;
+const fmtBRL = n => (n==null||isNaN(+n)) ? '—' : (+n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtCNPJ = v => { const d=String(v||'').replace(/\D/g,''); return d.length===14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5') : v; };
+const fmtDateIso = s => { if(!s) return ''; const d=new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleString('pt-BR'); };
+const setStatus = (kind, msg) => {
+  const p = $('#status-pill'); p.className = `status-pill ${kind||''}`;
+  $('#status-text').textContent = msg;
+};
+const enableStep = n => { $(`#step${n}`).classList.remove('disabled'); };
+const markStepDone = n => { $(`#step${n}`).classList.add('done'); };
+
+$('#cfg-end').value = new Date().toISOString().slice(0,10);
+
+// ============ AUTH ============
+$('#btn-auth').addEventListener('click', async () => {
+  const cid = $('#auth-cid').value.trim();
+  const secret = $('#auth-secret').value.trim();
+  if (!cid || !secret) { toast('Preencha credenciais', 'err'); return; }
+  const btn = $('#btn-auth');
+  btn.disabled = true; btn.textContent = 'Autenticando…';
+  setStatus('warn', 'Autenticando…');
+  try {
+    const t0 = performance.now();
+    const r = await fetch('https://auth.api.volus.com/v1/partners/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: new URLSearchParams({ grant_type:'client_credentials', client_id:cid, client_secret:secret }),
+    });
+    const ms = Math.round(performance.now() - t0);
+    const text = await r.text();
+    let data; try { data = JSON.parse(text); } catch { data = {raw:text}; }
+    if (r.ok && data.access_token) {
+      STATE.token = { ...data, expires_at: Date.now() + (data.expires_in||3600)*1000 };
+      STATE.companies = data.companies || [];
+      STATE.scope = data.scope || [];
+      $('#auth-info').className = 'auth-info show';
+      $('#auth-info').innerHTML = `✓ <strong>200 OK</strong> em ${ms}ms · <strong>${STATE.companies.length} empresas</strong> · scopes: <strong>${STATE.scope.map(s=>s.service_name).join(', ')}</strong>`;
+      setStatus('ok', `✓ ${STATE.companies.length} empresas autorizadas`);
+      $('#step1-meta').textContent = `✓ autenticado · token JWE válido por 1h`;
+      markStepDone(1);
+      renderCompanies();
+      enableStep(2);
+      enableStep(3);
+      toast(`Autenticado em ${ms}ms — ${STATE.companies.length} empresas`, 'ok');
+      btn.textContent = 'Re-autenticar';
+    } else {
+      $('#auth-info').className = 'auth-info show err';
+      $('#auth-info').innerHTML = `✗ <strong>HTTP ${r.status}</strong> · ${escapeHtml(data.message || data.detail || text.slice(0,150))}`;
+      setStatus('err', `HTTP ${r.status}`);
+      btn.textContent = 'Tentar novamente';
+    }
+  } catch (e) {
+    $('#auth-info').className = 'auth-info show err';
+    $('#auth-info').innerHTML = `✗ Erro de rede: ${escapeHtml(e.message)}`;
+    setStatus('err', 'Erro de rede');
+    btn.textContent = 'Tentar novamente';
+  }
+  btn.disabled = false;
+});
+
+// ============ COMPANIES ============
+function renderCompanies() {
+  STATE.selectedCompanyIds = new Set(STATE.companies.map(c=>c.id));
+  const ul = $('#companies-list'); ul.innerHTML = '';
+  STATE.companies.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+  STATE.companies.forEach(c => {
+    const li = document.createElement('li');
+    const cc = (c.id||'').slice(0,6), bc = (c.id||'').slice(6);
+    li.innerHTML = `
+      <input type="checkbox" id="comp-${c.id}" checked />
+      <span class="name">${escapeHtml(c.name||'—')}</span>
+      <span class="meta">${cc}-${bc} · CNPJ ${fmtCNPJ(c.tax_id)}</span>
+    `;
+    li.querySelector('input').addEventListener('change', e => {
+      e.target.checked ? STATE.selectedCompanyIds.add(c.id) : STATE.selectedCompanyIds.delete(c.id);
+      updateCompCount();
+    });
+    li.addEventListener('click', e => {
+      if (e.target.tagName !== 'INPUT') {
+        const cb = li.querySelector('input'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change'));
+      }
+    });
+    ul.appendChild(li);
+  });
+  updateCompCount();
+}
+function updateCompCount(){
+  const n = STATE.selectedCompanyIds.size;
+  $('#companies-count').textContent = n;
+  $('#step2-meta').textContent = `${n} empresa${n===1?'':'s'} selecionada${n===1?'':'s'}`;
+}
+$('#select-all-comp').addEventListener('click', () => {
+  $$('#companies-list input').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+});
+$('#deselect-all-comp').addEventListener('click', () => {
+  $$('#companies-list input').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+});
+$('#select-617').addEventListener('click', () => {
+  STATE.companies.forEach(c => { const cb=$(`#comp-${CSS.escape(c.id)}`); if(cb){cb.checked=c.id.startsWith('000617');cb.dispatchEvent(new Event('change'));} });
+});
+$('#select-600').addEventListener('click', () => {
+  STATE.companies.forEach(c => { const cb=$(`#comp-${CSS.escape(c.id)}`); if(cb){cb.checked=c.id.startsWith('000600');cb.dispatchEvent(new Event('change'));} });
+});
+
+// ============ EXTRACTION ============
+$('#btn-extract').addEventListener('click', async () => {
+  if (!STATE.token) { toast('Autentique primeiro', 'err'); return; }
+  const start = $('#cfg-start').value, end = $('#cfg-end').value;
+  if (!start || !end) { toast('Defina datas', 'err'); return; }
+  const companies = STATE.companies.filter(c => STATE.selectedCompanyIds.has(c.id));
+  if (companies.length === 0) { toast('Selecione ao menos 1 empresa', 'err'); return; }
+
+  STATE.results = { fuel:[], maint:[], credit:[], aircrafts:[] };
+  STATE.errors = [];
+  STATE.startedAt = Date.now();
+
+  const cardIds = $('#card-ids').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const queue = buildQueue(companies, cardIds, start, end);
+
+  $('#progress-area').style.display = 'block';
+  $('#log').innerHTML = '';
+  $('#ps-total').textContent = queue.length;
+  ['done','ok','403','404','other','tx'].forEach(k => $(`#ps-${k}`).textContent = '0');
+  $('#progress-fill').style.width = '0%';
+
+  $('#btn-extract').disabled = true;
+  $('#btn-extract').textContent = '⏳ Extraindo…';
+  setStatus('warn', `Extraindo: 0/${queue.length}`);
+
+  await runPool(queue, 4);
+
+  STATE.finishedAt = Date.now();
+  const elapsed = ((STATE.finishedAt - STATE.startedAt)/1000).toFixed(1);
+  const totalTx = STATE.results.fuel.length + STATE.results.maint.length + STATE.results.credit.length + STATE.results.aircrafts.length;
+  setStatus('ok', `✓ Concluído em ${elapsed}s — ${totalTx} registros`);
+  $('#step3-meta').textContent = `✓ ${totalTx} registros em ${elapsed}s`;
+  markStepDone(3);
+  $('#btn-extract').disabled = false;
+  $('#btn-extract').textContent = '▶ Extrair novamente';
+
+  enableStep(4);
+  renderKpis();
+  $('#step4').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+function buildQueue(companies, cardIds, start, end) {
+  // API atualizada 2x em 29/05/2026: agora usa company_id (era client_id, antes era client_code+branch_code)
+  const queue = [];
+  companies.forEach(c => {
+    const params = new URLSearchParams({start_date:start, end_date:end, company_id:c.id});
+    queue.push({ep:'fuel',  url:`https://extrato.api.volus.com/v1/fleet/fuel/statement?${params}`,        company:c});
+    queue.push({ep:'maint', url:`https://extrato.api.volus.com/v1/fleet/maintenance/statement?${params}`, company:c});
+    queue.push({ep:'aircrafts', url:`https://vehicles.api.volus.com/v1/aircrafts?company_id=${c.id}`,     company:c});
+  });
+  cardIds.forEach(cardId => {
+    const params = new URLSearchParams({card_id:cardId, start_date:start, end_date:end});
+    queue.push({ep:'credit', url:`https://extrato.api.volus.com/v1/credit-card/statement?${params}`, cardId});
+  });
+  return queue;
+}
+
+async function runPool(queue, concurrency=4) {
+  let idx = 0;
+  await Promise.all(Array.from({length:concurrency}, async () => {
+    while (idx < queue.length) await runOne(queue[idx++]);
+  }));
+}
+
+async function runOne(item) {
+  const {ep, url, company, cardId} = item;
+  const t0 = performance.now();
+  let status=0, text='', json=null;
+  try {
+    const r = await fetch(url, {method:'GET', headers:{'Authorization':`Bearer ${STATE.token.access_token}`, 'Accept':'application/json'}});
+    status = r.status; text = await r.text();
+    try { json = JSON.parse(text); } catch {}
+  } catch (e) { text = `Erro de rede: ${e.message}`; }
+  const ms = Math.round(performance.now() - t0);
+
+  let txCount = 0;
+  if (status === 200 && json) {
+    const dataObj = json.data || json;
+    let txs = dataObj.transactions || (Array.isArray(dataObj) ? dataObj : []);
+    if (ep === 'aircrafts') {
+      txs = dataObj.aircrafts || (Array.isArray(dataObj) ? dataObj : []);
+    }
+    if (Array.isArray(txs)) {
+      txCount = txs.length;
+      txs.forEach(t => {
+        const enriched = {...t};
+        if (company) enriched._company = company;
+        if (cardId) enriched._card_id = cardId;
+        STATE.results[ep].push(enriched);
+      });
+    }
+  } else if (status >= 400) {
+    STATE.errors.push({ep, url, status, message: json?.message || text.slice(0,150), company, cardId});
+  }
+  logLine({status, url, ms, ep, label: company?.name || cardId || '', txCount, message: json?.message});
+  updateProgress(status, txCount);
+}
+
+function logLine({status, url, ms, ep, label, txCount, message}) {
+  const log = $('#log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  const statClass = !status ? 's0' : `s${String(status)[0]}`;
+  const shortUrl = url.replace(/^https?:\/\/[^/]+/, '').slice(0, 70);
+  const ts = new Date().toLocaleTimeString('pt-BR', {hour12:false});
+  const info = status === 200 ? `+${txCount} · ${ms}ms` : `${message||'—'} · ${ms}ms`;
+  line.innerHTML = `<span class="ts">${ts}</span><span class="stat ${statClass}">${status||'ERR'}</span><span class="url" title="${escapeHtml(url)}">[${ep}] ${escapeHtml(label.slice(0,30))} ${escapeHtml(shortUrl)}</span><span class="info">${escapeHtml(info)}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function updateProgress(status, txCount) {
+  const done = +$('#ps-done').textContent + 1;
+  $('#ps-done').textContent = done;
+  if (status===200) $('#ps-ok').textContent = +$('#ps-ok').textContent + 1;
+  else if (status===403) $('#ps-403').textContent = +$('#ps-403').textContent + 1;
+  else if (status===404) $('#ps-404').textContent = +$('#ps-404').textContent + 1;
+  else $('#ps-other').textContent = +$('#ps-other').textContent + 1;
+  $('#ps-tx').textContent = +$('#ps-tx').textContent + txCount;
+  const total = +$('#ps-total').textContent;
+  const pct = Math.round(done*100/total);
+  $('#progress-fill').style.width = `${pct}%`;
+  setStatus('warn', `Extraindo: ${done}/${total} (${pct}%)`);
+}
+
+function renderKpis() {
+  const totalFuelR  = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalCreditR= STATE.results.credit.reduce((s,t)=>s+nz(t.amount),0);
+  const total = totalFuelR + totalMaintR + totalCreditR;
+  const elapsed = STATE.finishedAt ? ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1) : '—';
+  const k = $('#kpi-grid'); k.innerHTML = '';
+  const items = [
+    {label:'Abastecimentos', value: STATE.results.fuel.length.toLocaleString('pt-BR'), sub: fmtBRL(totalFuelR)},
+    {label:'Manutenções',    value: STATE.results.maint.length.toLocaleString('pt-BR'), sub: fmtBRL(totalMaintR)},
+    {label:'Crédito',        value: STATE.results.credit.length.toLocaleString('pt-BR'), sub: fmtBRL(totalCreditR)},
+    {label:'Aeronaves',      value: STATE.results.aircrafts.length.toLocaleString('pt-BR'), sub: 'registros'},
+    {label:'Total geral',    value: fmtBRL(total), sub: 'consolidado'},
+    {label:'Erros',          value: STATE.errors.length.toLocaleString('pt-BR'), sub: 'requests falhadas'},
+    {label:'Tempo',          value: `${elapsed}s`, sub: 'última extração'},
+  ];
+  items.forEach(i => {
+    const el = document.createElement('div'); el.className='kpi';
+    el.innerHTML = `<div class="label">${i.label}</div><div class="value">${i.value}</div><div class="sub">${i.sub}</div>`;
+    k.appendChild(el);
+  });
+  $('#step4-meta').textContent = `${(STATE.results.fuel.length+STATE.results.maint.length+STATE.results.credit.length+STATE.results.aircrafts.length).toLocaleString('pt-BR')} registros prontos`;
+}
+
+// ============ XLSX BUILDER ============
+function buildXlsx() {
+  if (typeof XLSX === 'undefined') { toast('SheetJS não carregou (precisa de internet)', 'err'); return; }
+  const wb = XLSX.utils.book_new();
+  const now = new Date();
+  const startDate = $('#cfg-start').value, endDate = $('#cfg-end').value;
+
+  // ===== SHEET: Resumo =====
+  const totalFuelR  = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalCreditR= STATE.results.credit.reduce((s,t)=>s+nz(t.amount),0);
+  const total = totalFuelR + totalMaintR + totalCreditR;
+  const resumo = [
+    ['VÓLUS — EXTRAÇÃO CONSOLIDADA'],
+    [],
+    ['Gerado em',           now.toLocaleString('pt-BR')],
+    ['Período',             `${startDate} a ${endDate}`],
+    ['Empresas autorizadas', STATE.companies.length],
+    ['Empresas extraídas',   STATE.selectedCompanyIds.size],
+    ['Scopes do token',      STATE.scope.map(s=>s.service_name).join(', ')],
+    [],
+    ['CATEGORIA',           'QUANTIDADE',                'TOTAL (R$)'],
+    ['Combustível',         STATE.results.fuel.length,   totalFuelR],
+    ['Manutenção',          STATE.results.maint.length,  totalMaintR],
+    ['Cartão de crédito',   STATE.results.credit.length, totalCreditR],
+    ['Aeronaves',           STATE.results.aircrafts.length, ''],
+    [],
+    ['TOTAL GERAL',         STATE.results.fuel.length+STATE.results.maint.length+STATE.results.credit.length, total],
+    [],
+    ['Requests com falha', STATE.errors.length],
+    ['Tempo de extração',  STATE.finishedAt ? ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1)+'s' : ''],
+  ];
+  const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
+  wsResumo['!cols'] = [{wch:26}, {wch:22}, {wch:22}];
+  ['B10','B11','B12','B14'].forEach(c => { if(wsResumo[c]) wsResumo[c].t='n'; });
+  ['C10','C11','C12','C14'].forEach(c => { if(wsResumo[c]) { wsResumo[c].t='n'; wsResumo[c].z='[$R$-pt-BR] #,##0.00'; } });
+  if (wsResumo['A1']) wsResumo['A1'].s = {font:{bold:true,sz:14}};
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+  // ===== SHEET: Empresas =====
+  const empHeader = ['ID (12 dígitos)','client_code','branch_code','Nome','CNPJ','Selecionada?'];
+  const empRows = STATE.companies.map(c => [
+    c.id, (c.id||'').slice(0,6), (c.id||'').slice(6),
+    c.name || '', fmtCNPJ(c.tax_id),
+    STATE.selectedCompanyIds.has(c.id) ? 'Sim' : 'Não',
+  ]);
+  const wsEmp = XLSX.utils.aoa_to_sheet([empHeader, ...empRows]);
+  wsEmp['!cols'] = [{wch:14},{wch:13},{wch:13},{wch:60},{wch:20},{wch:13}];
+  wsEmp['!autofilter'] = {ref:`A1:F${empRows.length+1}`};
+  wsEmp['!freeze'] = {xSplit:0, ySplit:1};
+  XLSX.utils.book_append_sheet(wb, wsEmp, 'Empresas');
+
+  // ===== SHEET: Combustível =====
+  if (STATE.results.fuel.length > 0) {
+    const head = ['Data','Empresa','client_code','branch_code','Placa','Prefixo','Veículo','Ano','Operador','CNH','CPF Operador','Posto','CNPJ Posto','Endereço','Bairro','Cidade','UF','CEP','Latitude','Longitude','Produto','Quantidade','Valor unit. (R$)','Total (R$)','Hodômetro','Consumo (km/l)','Distância (km)','NF','Faturado','Empenho','Processo','Unidade','Código Unidade','ID transação'];
+    const rows = STATE.results.fuel.map(t => {
+      const prods = t.product || [];
+      const total = prods.reduce((s,p)=>s+nz(p.total_value),0);
+      const qty = prods.reduce((s,p)=>s+nz(p.quantity),0);
+      const firstPrice = prods[0] ? nz(prods[0].unit_price) : 0;
+      return [
+        t.refuel_datetime ? new Date(t.refuel_datetime) : '',
+        t._company?.name || '', (t._company?.id||'').slice(0,6), (t._company?.id||'').slice(6),
+        t.card?.plate || '', t.card?.prefix || '',
+        [t.card?.brand_name, t.card?.model_name].filter(Boolean).join(' '),
+        t.card?.manufacture_year || '',
+        t.operator?.name || '', t.operator?.license || '', t.operator?.id_number || '',
+        t.merchant?.name || '', t.merchant?.cnpj || '',
+        t.merchant?.address?.street || '', t.merchant?.address?.district || '',
+        t.merchant?.address?.city || '', t.merchant?.address?.state || '', t.merchant?.address?.zip_code || '',
+        t.merchant?.geo_location?.latitude || '', t.merchant?.geo_location?.longitude || '',
+        prods.map(p=>p.name).filter(Boolean).join(', '),
+        qty, firstPrice, total,
+        t.accumulated_distance || '', t.average_consumption || '', t.distance_traveled || '',
+        t.fiscal_document || '', t.is_billed ? 'Sim' : 'Não',
+        t.purchase_order?.commitment_number || '', t.purchase_order?.process_number || '',
+        t.unit?.name || '', t.unit?.code || '',
+        t.id || '',
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws['!cols'] = head.map((h,i) => ({wch: [0,2].includes(i) ? 18 : (h.length>15 ? h.length+2 : 14)}));
+    ws['!autofilter'] = {ref:`A1:${cellRef(head.length-1, rows.length)}`};
+    ws['!freeze'] = {xSplit:0, ySplit:1};
+    // Format currency columns (23-Valor unit., 24-Total)
+    for (let r=2; r<=rows.length+1; r++) {
+      ['W','X'].forEach(col => { if (ws[col+r]) { ws[col+r].t='n'; ws[col+r].z='[$R$-pt-BR] #,##0.00'; } });
+      if (ws['V'+r]) { ws['V'+r].t='n'; ws['V'+r].z='#,##0.000'; }
+      if (ws['A'+r]) { ws['A'+r].z='dd/mm/yyyy hh:mm'; }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Combustível');
+  }
+
+  // ===== SHEET: Manutenção =====
+  if (STATE.results.maint.length > 0) {
+    const head = ['Data','Empresa','client_code','branch_code','Ordem (orçamento)','Placa','Veículo','Operador','Oficina','CNPJ Oficina','Cidade','UF','Tipo manutenção','Hodômetro/Horímetro','NF Peças','NF Serviços','Total (R$)','Qtd Itens','Empenho','Processo','Unidade'];
+    const rows = STATE.results.maint.map(t => {
+      const products = t.products || [];
+      const total = products.reduce((s,p)=>s+nz(p.total_value),0);
+      return [
+        t.transaction_datetime ? new Date(t.transaction_datetime) : '',
+        t._company?.name || '', (t._company?.id||'').slice(0,6), (t._company?.id||'').slice(6),
+        t.order_id || '', t.card?.plate || '',
+        [t.card?.brand_name, t.card?.model_name].filter(Boolean).join(' '),
+        t.operator?.name || '', t.merchant?.name || '', t.merchant?.cnpj || '',
+        t.merchant?.address?.city || '', t.merchant?.address?.state || '',
+        t.maintenance_context?.maintenance_type || '',
+        t.maintenance_context?.usage_metric || '',
+        t.invoice?.product_invoice_number || '', t.invoice?.service_invoice_number || '',
+        total, products.length,
+        t.purchase_order?.commitment_number || '', t.purchase_order?.process_number || '',
+        t.unit?.name || '',
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws['!cols'] = head.map((h,i) => ({wch: i===0 ? 18 : (h.length>15 ? h.length+2 : 14)}));
+    ws['!autofilter'] = {ref:`A1:${cellRef(head.length-1, rows.length)}`};
+    ws['!freeze'] = {xSplit:0, ySplit:1};
+    for (let r=2; r<=rows.length+1; r++) {
+      if (ws['Q'+r]) { ws['Q'+r].t='n'; ws['Q'+r].z='[$R$-pt-BR] #,##0.00'; }
+      if (ws['A'+r]) { ws['A'+r].z='dd/mm/yyyy hh:mm'; }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Manutenção');
+  }
+
+  // ===== SHEET: Crédito =====
+  if (STATE.results.credit.length > 0) {
+    const head = ['Data','Card ID','Status','Categoria','Sinal','Tipo operação','Tipo transação','Modo entrada','Estabelecimento','MCC','Cidade','UF','Endereço','CEP','Valor (R$)','Moeda','Parcela atual','Parcela total','Data venda parcelada','Produto','Código autorização','ID lançamento'];
+    const rows = STATE.results.credit.map(t => [
+      t.date ? new Date(t.date) : '',
+      t._card_id || '',
+      t.status || '', t.transaction_category || '', t.signal || '',
+      t.operation_type || '', t.transaction_type || '', t.entry_mode || '',
+      t.merchant?.name || '', t.merchant?.mcc || '',
+      t.merchant?.city || '', t.merchant?.state || '',
+      t.merchant?.address || '', t.merchant?.zip_code || '',
+      nz(t.amount), t.currency || 'BRL',
+      t.installments?.current || '', t.installments?.total || '',
+      t.installments?.transaction_date || '',
+      t.product || '', t.authorization_code || '', t.id || '',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws['!cols'] = head.map(h => ({wch: h.length>14 ? h.length+2 : 14}));
+    ws['!autofilter'] = {ref:`A1:${cellRef(head.length-1, rows.length)}`};
+    ws['!freeze'] = {xSplit:0, ySplit:1};
+    for (let r=2; r<=rows.length+1; r++) {
+      if (ws['O'+r]) { ws['O'+r].t='n'; ws['O'+r].z='[$R$-pt-BR] #,##0.00'; }
+      if (ws['A'+r]) { ws['A'+r].z='dd/mm/yyyy hh:mm'; }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Crédito');
+  }
+
+  // ===== SHEET: Aeronaves =====
+  if (STATE.results.aircrafts.length > 0) {
+    const head = ['Tail ID','Empresa','client_code','branch_code','Detalhes (JSON)'];
+    const rows = STATE.results.aircrafts.map(a => [
+      a.tail_id || a.id || '',
+      a._company?.name || '', (a._company?.id||'').slice(0,6), (a._company?.id||'').slice(6),
+      JSON.stringify(a),
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws['!cols'] = [{wch:14},{wch:40},{wch:13},{wch:13},{wch:80}];
+    ws['!autofilter'] = {ref:`A1:E${rows.length+1}`};
+    ws['!freeze'] = {xSplit:0, ySplit:1};
+    XLSX.utils.book_append_sheet(wb, ws, 'Aeronaves');
+  }
+
+  // ===== SHEET: Erros =====
+  if (STATE.errors.length > 0) {
+    const head = ['HTTP Status','Endpoint','URL completa','Empresa/Card','Mensagem'];
+    const rows = STATE.errors.map(e => [
+      e.status, e.ep, e.url, e.company?.name || e.cardId || '', e.message || '',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws['!cols'] = [{wch:12},{wch:14},{wch:80},{wch:40},{wch:50}];
+    ws['!autofilter'] = {ref:`A1:E${rows.length+1}`};
+    ws['!freeze'] = {xSplit:0, ySplit:1};
+    XLSX.utils.book_append_sheet(wb, ws, 'Erros');
+  }
+
+  // Filename
+  const datePart = now.toISOString().slice(0,10);
+  const filename = `volus-extracao-${datePart}.xlsx`;
+  XLSX.writeFile(wb, filename, {compression:true});
+  toast(`Planilha gerada: ${filename}`, 'ok');
+}
+
+function cellRef(col, row) {
+  let s = '';
+  let c = col;
+  do { s = String.fromCharCode(65 + c%26) + s; c = Math.floor(c/26) - 1; } while (c >= 0);
+  return s + (row+1);
+}
+
+// ============ DOWNLOAD BUTTONS ============
+$('#btn-download').addEventListener('click', buildXlsx);
+
+$('#btn-download-json').addEventListener('click', () => {
+  const data = {
+    extracted_at: new Date().toISOString(),
+    auth: {companies: STATE.companies, scope: STATE.scope},
+    period: {start: $('#cfg-start').value, end: $('#cfg-end').value},
+    fleet_fuel: STATE.results.fuel.map(t => ({company_id: t._company?.id, response: {transactions:[t]}})),
+    fleet_maintenance: STATE.results.maint.map(t => ({company_id: t._company?.id, response: {transactions:[t]}})),
+    credit_card_statements: STATE.results.credit.map(t => ({card_id: t._card_id, response: {transactions:[t]}})),
+    aircrafts: STATE.results.aircrafts,
+    errors: STATE.errors,
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`volus-extracao-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('JSON baixado', 'ok');
+});
+
+$('#btn-restart').addEventListener('click', () => {
+  if (!confirm('Limpar tudo e começar de novo?')) return;
+  location.reload();
+});
+
+// ============ INIT ============
+toast('Pronto. Clique Autenticar pra começar.', '');
+</script>
+</body>
+</html>

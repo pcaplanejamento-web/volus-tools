@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Volus API Tester — Live</title>
+<style>
+:root {
+  --bg-page: #EEF2F8;
+  --bg-grad: radial-gradient(1200px 600px at 8% -10%, rgba(67,97,238,.10), transparent 60%),
+             radial-gradient(900px 500px at 100% 0%, rgba(149,168,255,.10), transparent 55%),
+             linear-gradient(180deg, #f6f8fc 0%, #EEF2F8 100%);
+  --surface: rgba(255,255,255,.85);
+  --surface-elev: #ffffff;
+  --surface-subtle: rgba(248,250,255,.6);
+  --text: #1A1F36;
+  --text-strong: #0f172a;
+  --text-muted: #5F6B7A;
+  --text-subtle: #94a3b8;
+  --accent: #4361ee;
+  --accent-strong: #3651cc;
+  --accent-bg: rgba(67,97,238,.10);
+  --accent-bg-subtle: rgba(67,97,238,.06);
+  --accent-border: rgba(67,97,238,.22);
+  --border: rgba(63,81,181,.14);
+  --border-subtle: rgba(63,81,181,.08);
+  --ok: #16a34a;
+  --ok-bg: rgba(22,163,74,.10);
+  --err: #dc2626;
+  --err-bg: rgba(220,38,38,.10);
+  --warn: #f59e0b;
+  --warn-bg: rgba(245,158,11,.12);
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --shadow: 0 4px 10px -2px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
+  --shadow-lg: 0 12px 28px -6px rgba(15,23,42,.14), 0 6px 16px rgba(15,23,42,.06);
+  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg-page);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; border: 0; }
+input, select, textarea { font: inherit; color: inherit; }
+code, pre, .mono { font-family: var(--font-mono); }
+.app { max-width: 1480px; margin: 0 auto; padding: 18px 24px 60px; }
+
+/* TOPBAR */
+.topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
+  background: var(--surface-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text-strong); }
+.brand-mark { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent) 0%, #6366f1 100%); border-radius: 9px; display: grid; place-items: center; color: white; font-weight: 800; box-shadow: 0 4px 12px -2px rgba(67,97,238,.5); }
+.brand-sub { color: var(--text-muted); font-weight: 500; font-size: 12px; margin-left: 4px; }
+.topbar .spacer { flex: 1; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .15s;
+}
+.btn:hover { background: var(--accent-bg-subtle); border-color: var(--accent-border); }
+.btn.primary { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 6px -1px rgba(67,97,238,.4); }
+.btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+.btn.ghost { background: transparent; }
+.btn svg { width: 14px; height: 14px; }
+
+/* GRID */
+.grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 18px;
+}
+@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+
+/* PANELS */
+.panel {
+  background: var(--surface-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.panel-h {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600; color: var(--text-strong);
+  display: flex; align-items: center; gap: 10px;
+}
+.panel-h .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-bg-subtle); color: var(--accent); font-weight: 600; }
+.panel-body { padding: 14px 16px; }
+
+/* AUTH PANEL */
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
+.field input {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-subtle); font-family: var(--font-mono); font-size: 12px;
+}
+.field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg-subtle); }
+.field .hint { font-size: 11px; color: var(--text-subtle); margin-top: 2px; }
+
+.auth-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  font-size: 12px;
+}
+.auth-status.ok { background: var(--ok-bg); border-color: rgba(22,163,74,.25); color: var(--ok); }
+.auth-status.err { background: var(--err-bg); border-color: rgba(220,38,38,.25); color: var(--err); }
+.auth-status.warn { background: var(--warn-bg); border-color: rgba(245,158,11,.3); color: var(--warn); }
+
+.token-info { padding: 12px; background: var(--surface-subtle); border-radius: var(--radius); margin-top: 10px; font-size: 12px; }
+.token-info .row { display: flex; justify-content: space-between; padding: 3px 0; }
+.token-info .row .k { color: var(--text-muted); }
+.token-info .row .v { font-family: var(--font-mono); color: var(--text-strong); font-weight: 500; }
+.token-info code { word-break: break-all; }
+
+.companies { padding: 0; margin: 0; list-style: none; max-height: 280px; overflow-y: auto; }
+.companies li {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.companies li:hover { background: var(--accent-bg-subtle); }
+.companies li.active { background: var(--accent-bg); border-left: 3px solid var(--accent); padding-left: 7px; }
+.companies li .name { font-weight: 600; color: var(--text-strong); display: block; }
+.companies li .meta { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+
+/* ENDPOINT MATRIX */
+.endpoints { display: flex; flex-direction: column; gap: 14px; }
+.ep-group { border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; }
+.ep-group-h { padding: 10px 14px; background: var(--accent-bg-subtle); display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text-strong); font-size: 13px; }
+.ep-group-h .url { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; font-weight: 400; margin-left: auto; }
+.ep-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 90px 100px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+.ep-row .method {
+  text-align: center;
+  font-weight: 700; font-size: 10px;
+  padding: 4px 8px; border-radius: 4px;
+  background: var(--accent-bg); color: var(--accent);
+}
+.ep-row .method.GET    { background: rgba(22,163,74,.12); color: var(--ok); }
+.ep-row .method.POST   { background: rgba(245,158,11,.12); color: var(--warn); }
+.ep-row .method.PUT    { background: rgba(67,97,238,.12); color: var(--accent); }
+.ep-row .method.DELETE { background: var(--err-bg); color: var(--err); }
+.ep-row .path { font-family: var(--font-mono); color: var(--text-strong); }
+.ep-row .path .desc { display: block; font-family: var(--font); color: var(--text-muted); font-size: 11px; margin-top: 2px; font-weight: 400; }
+.ep-row .last-status { font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; text-align: center; }
+.ep-row .last-status.s2 { background: var(--ok-bg); color: var(--ok); }
+.ep-row .last-status.s4 { background: var(--err-bg); color: var(--err); }
+.ep-row .last-status.s5 { background: var(--err-bg); color: var(--err); }
+.ep-row .last-status.s0 { background: rgba(148,163,184,.12); color: var(--text-muted); }
+
+/* RESULT PANEL */
+.result-empty { padding: 40px; text-align: center; color: var(--text-muted); }
+.result-empty .icon { font-size: 32px; margin-bottom: 8px; opacity: .4; }
+.result-meta {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+}
+.result-meta .status {
+  padding: 4px 10px; border-radius: 4px;
+  font-weight: 700; font-family: var(--font-mono); font-size: 13px;
+}
+.result-meta .status.s2 { background: var(--ok-bg); color: var(--ok); border: 1px solid rgba(22,163,74,.25); }
+.result-meta .status.s4 { background: var(--err-bg); color: var(--err); border: 1px solid rgba(220,38,38,.25); }
+.result-meta .status.s5 { background: var(--err-bg); color: var(--err); border: 1px solid rgba(220,38,38,.25); }
+.result-meta .status.s0 { background: rgba(148,163,184,.12); color: var(--text-muted); border: 1px solid var(--border); }
+.result-meta .url-display { font-family: var(--font-mono); color: var(--text-strong); font-size: 12px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.result-meta .time { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+.tabs-mini { display: flex; gap: 0; border-bottom: 1px solid var(--border-subtle); }
+.tabs-mini button { padding: 8px 14px; background: transparent; border-bottom: 2px solid transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.tabs-mini button:hover { color: var(--text); }
+.tabs-mini button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-body { padding: 14px 16px; max-height: 60vh; overflow: auto; }
+.tab-body pre { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+.copy-btn { float: right; margin-bottom: 8px; }
+
+/* PARAMS MODAL */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(8,12,28,.45);
+  display: none; align-items: center; justify-content: center;
+  z-index: 100; backdrop-filter: blur(4px);
+}
+.modal-backdrop.active { display: flex; }
+.modal {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: min(560px, calc(100% - 32px));
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-h {
+  padding: 14px 18px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text-strong);
+}
+.modal-h .close { margin-left: auto; background: transparent; padding: 4px 8px; border-radius: 4px; color: var(--text-muted); }
+.modal-h .close:hover { background: var(--err-bg); color: var(--err); }
+.modal-b { padding: 14px 18px; }
+.modal-f { padding: 12px 18px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface-subtle); }
+
+/* TOAST */
+.toast-host {
+  position: fixed; bottom: 20px; right: 20px; z-index: 200;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: white; border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  padding: 10px 14px; border-radius: 6px;
+  box-shadow: var(--shadow); font-size: 13px;
+  max-width: 380px; animation: slide .25s ease-out;
+}
+.toast.err { border-left-color: var(--err); }
+.toast.ok { border-left-color: var(--ok); }
+@keyframes slide { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">⚡</div>
+      <span>Volus API Tester</span>
+      <span class="brand-sub">Live · Auth + Endpoints</span>
+    </div>
+    <div class="spacer"></div>
+    <span id="time-now" class="mono" style="color: var(--text-muted); font-size: 12px;"></span>
+  </header>
+
+  <div class="grid">
+
+    <!-- LEFT: AUTH + COMPANIES -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+
+      <div class="panel">
+        <div class="panel-h">
+          <span>1 · Autenticação</span>
+          <span class="badge" id="auth-badge">aguardando</span>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Client ID</label>
+            <input id="auth-cid" type="text" value="52cb732b-d904-0aa0-e063-326fa8c0d811" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>Client Secret</label>
+            <input id="auth-secret" type="text" value="A723A490C3882C7DFC8E698CE3345BBE" spellcheck="false" />
+            <span class="hint">Pré-preenchido com as credenciais que o Roger enviou em 27/05 às 15:59.</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn primary" id="btn-auth" style="flex: 1;">Autenticar</button>
+            <button class="btn ghost" id="btn-clear">Limpar</button>
+          </div>
+          <div id="auth-status" class="auth-status" style="display: none;"></div>
+          <div id="token-info" class="token-info" style="display: none;"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="companies-panel" style="display: none;">
+        <div class="panel-h">
+          <span>2 · Empresas autorizadas</span>
+          <span class="badge" id="companies-badge">0</span>
+        </div>
+        <ul class="companies" id="companies-list"></ul>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: ENDPOINTS + RESULT -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+
+      <div class="panel">
+        <div class="panel-h">
+          <span>3 · Endpoints — testar</span>
+          <span class="badge">15 endpoints</span>
+          <span style="margin-left: auto; font-size: 12px; font-weight: normal; color: var(--text-muted);">Selecionar empresa →
+            <select id="company-picker" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); margin-left: 6px; font-size: 12px;"><option value="">— Sem empresa —</option></select>
+          </span>
+        </div>
+        <div class="panel-body" style="padding: 12px;">
+          <div class="endpoints" id="endpoints-list"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="result-panel">
+        <div class="panel-h">
+          <span>4 · Resultado</span>
+          <span class="badge" id="result-badge">—</span>
+        </div>
+        <div id="result-empty" class="result-empty">
+          <div class="icon">📡</div>
+          <div>Clique em <strong>Testar</strong> em qualquer endpoint acima para ver o resultado aqui.</div>
+        </div>
+        <div id="result-content" style="display: none;">
+          <div class="result-meta">
+            <span class="status" id="r-status">—</span>
+            <span class="url-display" id="r-url"></span>
+            <span class="time" id="r-time"></span>
+          </div>
+          <div class="tabs-mini">
+            <button class="active" data-rt="body">Response Body</button>
+            <button data-rt="headers">Response Headers</button>
+            <button data-rt="curl">cURL</button>
+          </div>
+          <div class="tab-body" id="r-tab-body"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- PARAMS MODAL -->
+<div class="modal-backdrop" id="params-modal">
+  <div class="modal">
+    <div class="modal-h">
+      <span id="pm-title">Parâmetros</span>
+      <button class="close" id="pm-close">✕</button>
+    </div>
+    <div class="modal-b" id="pm-body"></div>
+    <div class="modal-f">
+      <button class="btn ghost" id="pm-cancel">Cancelar</button>
+      <button class="btn primary" id="pm-run">Executar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-host" id="toast-host"></div>
+
+<script>
+'use strict';
+
+// ============ STATE ============
+const STATE = {
+  token: null,        // {access_token, refresh_token, expires_in, expires_at, scope, companies}
+  selectedCompany: null,
+  lastResult: null,
+  lastResultTab: 'body',
+};
+
+// ============ HELPERS ============
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const toast = (msg, kind='') => {
+  const t = document.createElement('div');
+  t.className = `toast ${kind}`;
+  t.textContent = msg;
+  $('#toast-host').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+};
+const fmtDate = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+const escapeHtml = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function statusClass(code) {
+  if (!code) return 's0';
+  const n = String(code)[0];
+  return `s${n}`;
+}
+
+// ============ TIME CLOCK ============
+setInterval(() => {
+  $('#time-now').textContent = new Date().toLocaleTimeString('pt-BR');
+  // Token countdown
+  if (STATE.token && STATE.token.expires_at) {
+    const rem = Math.max(0, Math.floor((STATE.token.expires_at - Date.now()) / 1000));
+    const el = $('#token-countdown');
+    if (el) {
+      const m = Math.floor(rem / 60), s = rem % 60;
+      el.textContent = `${m}m ${s.toString().padStart(2,'0')}s`;
+      el.style.color = rem < 60 ? 'var(--err)' : rem < 300 ? 'var(--warn)' : 'var(--ok)';
+    }
+  }
+}, 1000);
+
+// ============ ENDPOINTS CATALOG ============
+const ENDPOINTS = [
+  {
+    group: 'auth',
+    title: 'auth.api.volus.com — Autenticação',
+    baseUrl: 'https://auth.api.volus.com',
+    items: [
+      { method: 'POST', path: '/v1/partners/auth/token', desc: 'Já é feito no botão Autenticar acima', disabled: true },
+    ],
+  },
+  {
+    group: 'extrato',
+    title: 'extrato.api.volus.com — Extrato de Cartões e Frota',
+    baseUrl: 'https://extrato.api.volus.com',
+    items: [
+      { method: 'GET', path: '/v1/fleet/fuel/statement', desc: 'Abastecimentos do cartão de frota',
+        params: ['client_id*', 'start_date*', 'end_date*', 'plate', 'prefix'] },
+      { method: 'GET', path: '/v1/fleet/maintenance/statement', desc: 'Manutenções do cartão de frota',
+        params: ['client_id*', 'start_date*', 'end_date*', 'plate', 'prefix'] },
+      { method: 'GET', path: '/v1/credit-card/statement', desc: 'Extrato do cartão de crédito',
+        params: ['card_id*', 'start_date*', 'end_date*'] },
+    ],
+  },
+  {
+    group: 'vehicles',
+    title: 'vehicles.api.volus.com — Consulta de Veículos',
+    baseUrl: 'https://vehicles.api.volus.com',
+    items: [
+      { method: 'GET', path: '/v1/aircrafts', desc: 'Lista as aeronaves disponíveis',
+        params: ['client_id', 'tail_id'] },
+    ],
+  },
+  {
+    group: 'cartoes',
+    title: 'cartoes.api.volus.com — Gestão de Cartões para Emissores',
+    baseUrl: 'https://cartoes.api.volus.com',
+    items: [
+      { method: 'GET', path: '/v1/organization/balance', desc: 'Saldo do parceiro', params: ['company_id*'] },
+      { method: 'GET', path: '/v1/organization/statement', desc: 'Extrato de gastos do parceiro', params: ['company_id*', 'initial_date', 'final_date'] },
+      { method: 'GET', path: '/v1/cards', desc: 'Cartões físicos do parceiro', params: ['company_id*', 'status', 'cpf'] },
+      { method: 'GET', path: '/v1/invoices', desc: 'Faturas geradas ao parceiro', params: ['company_id*'] },
+      { method: 'GET', path: '/v1/mcc-groups', desc: 'Grupos de MCC', params: ['company_id*'] },
+      { method: 'GET', path: '/v1/anonymous', desc: 'Cartões anônimos', params: ['company_id*'] },
+    ],
+  },
+];
+
+// ============ ENDPOINT RENDERING ============
+function renderEndpoints() {
+  const host = $('#endpoints-list');
+  host.innerHTML = '';
+  ENDPOINTS.forEach(group => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ep-group';
+    wrap.innerHTML = `
+      <div class="ep-group-h">
+        <span>${escapeHtml(group.title)}</span>
+        <span class="url">${escapeHtml(group.baseUrl)}</span>
+      </div>
+    `;
+    group.items.forEach(ep => {
+      const row = document.createElement('div');
+      row.className = 'ep-row';
+      const epKey = `${group.group}:${ep.method}:${ep.path}`;
+      row.innerHTML = `
+        <span class="method ${ep.method}">${ep.method}</span>
+        <span class="path">
+          <code>${escapeHtml(ep.path)}</code>
+          <span class="desc">${escapeHtml(ep.desc)}${ep.params?.length ? ' · params: '+ep.params.map(p=>p.endsWith('*')?`<strong>${p.slice(0,-1)}</strong>`:p).join(', ') : ''}</span>
+        </span>
+        <span class="last-status s0" data-status-for="${epKey}">—</span>
+        <button class="btn sm ${ep.disabled?'':'primary'}" data-test="${epKey}" ${ep.disabled?'disabled':''}>${ep.disabled?'(usar topo)':'Testar'}</button>
+      `;
+      wrap.appendChild(row);
+      row.querySelector('[data-test]')?.addEventListener('click', () => openTestModal(group, ep));
+    });
+    host.appendChild(wrap);
+  });
+}
+
+// ============ AUTH ============
+$('#btn-auth').addEventListener('click', async () => {
+  const cid = $('#auth-cid').value.trim();
+  const secret = $('#auth-secret').value.trim();
+  if (!cid || !secret) { toast('Preencha Client ID e Secret', 'err'); return; }
+  const btn = $('#btn-auth');
+  btn.disabled = true; btn.textContent = 'Autenticando…';
+  $('#auth-badge').textContent = 'tentando…';
+  try {
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: cid,
+      client_secret: secret,
+    });
+    const t0 = performance.now();
+    const r = await fetch('https://auth.api.volus.com/v1/partners/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body,
+    });
+    const ms = Math.round(performance.now() - t0);
+    const text = await r.text();
+    let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    if (r.ok && data.access_token) {
+      STATE.token = {
+        ...data,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+        obtained_at: Date.now(),
+      };
+      showAuthOk(ms);
+      renderCompanies(data.companies || []);
+      toast(`Autenticado: ${data.companies?.length || 0} empresas, ${data.scope?.length || 0} serviços (${ms}ms)`, 'ok');
+    } else {
+      showAuthErr(r.status, data.message || data.detail || text.slice(0,200), ms);
+      toast(`HTTP ${r.status}: ${data.message || 'falhou'}`, 'err');
+    }
+  } catch (e) {
+    showAuthErr(0, e.message);
+    toast(`Erro de rede: ${e.message}`, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Re-autenticar';
+});
+
+$('#btn-clear').addEventListener('click', () => {
+  STATE.token = null;
+  STATE.selectedCompany = null;
+  $('#auth-status').style.display = 'none';
+  $('#token-info').style.display = 'none';
+  $('#companies-panel').style.display = 'none';
+  $('#auth-badge').textContent = 'aguardando';
+  $('#company-picker').innerHTML = '<option value="">— Sem empresa —</option>';
+  $('#result-empty').style.display = 'block';
+  $('#result-content').style.display = 'none';
+  $('#result-badge').textContent = '—';
+  // Reset all endpoint statuses
+  $$('[data-status-for]').forEach(el => { el.textContent = '—'; el.className = 'last-status s0'; });
+});
+
+function showAuthOk(ms) {
+  const s = $('#auth-status');
+  s.style.display = 'block';
+  s.className = 'auth-status ok';
+  s.innerHTML = `✓ <strong>200 OK</strong> em ${ms}ms — token JWE recebido`;
+  $('#auth-badge').textContent = '✓ autenticado';
+  $('#auth-badge').style.background = 'var(--ok-bg)';
+  $('#auth-badge').style.color = 'var(--ok)';
+  renderTokenInfo();
+}
+function showAuthErr(status, msg, ms='') {
+  const s = $('#auth-status');
+  s.style.display = 'block';
+  s.className = 'auth-status err';
+  s.innerHTML = `✗ <strong>HTTP ${status||'?'}</strong>${ms?` em ${ms}ms`:''} — ${escapeHtml(msg)}`;
+  $('#auth-badge').textContent = '✗ falhou';
+  $('#auth-badge').style.background = 'var(--err-bg)';
+  $('#auth-badge').style.color = 'var(--err)';
+  $('#token-info').style.display = 'none';
+}
+function renderTokenInfo() {
+  const t = STATE.token; if (!t) return;
+  const el = $('#token-info');
+  el.style.display = 'block';
+  const access = t.access_token || '';
+  // Decode JWE header (first segment, base64url)
+  let header = {};
+  try { header = JSON.parse(atob(access.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'))); } catch {}
+  el.innerHTML = `
+    <div class="row"><span class="k">Token type</span><span class="v">${t.token_type || '—'}</span></div>
+    <div class="row"><span class="k">Expira em</span><span class="v" id="token-countdown">…</span></div>
+    <div class="row"><span class="k">Algoritmo</span><span class="v">${escapeHtml(header.alg||'?')} + ${escapeHtml(header.enc||'?')}</span></div>
+    <div class="row"><span class="k">Tamanho</span><span class="v">${access.length} chars · ${access.split('.').length} segmentos</span></div>
+    <div class="row"><span class="k">Scopes</span><span class="v">${(t.scope||[]).map(s=>s.service_name).join(', ') || '—'}</span></div>
+    <details style="margin-top: 6px;">
+      <summary style="cursor:pointer; color: var(--accent); font-size: 11px;">Mostrar token completo</summary>
+      <code style="display: block; margin-top: 6px; font-size: 10px; padding: 6px; background: white; border-radius: 4px;">${escapeHtml(access)}</code>
+      <button class="btn sm" style="margin-top: 4px;" onclick="navigator.clipboard.writeText('${access}'); event.target.textContent='✓ copiado';">Copiar token</button>
+    </details>
+  `;
+}
+
+function renderCompanies(companies) {
+  $('#companies-panel').style.display = '';
+  $('#companies-badge').textContent = companies.length;
+  const ul = $('#companies-list');
+  ul.innerHTML = '';
+  companies.sort((a,b) => (a.id||'').localeCompare(b.id||''));
+  companies.forEach((c, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="name">${escapeHtml(c.name || '—')}</span>
+      <span class="meta">id=${escapeHtml(c.id)} · CNPJ ${escapeHtml(c.tax_id||'—')}</span>
+    `;
+    li.addEventListener('click', () => selectCompany(c, li));
+    ul.appendChild(li);
+    if (i === 0) selectCompany(c, li);
+  });
+  // Picker
+  const picker = $('#company-picker');
+  picker.innerHTML = '';
+  companies.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = `${c.id} · ${(c.name||'').slice(0,40)}`;
+    picker.appendChild(opt);
+  });
+  picker.addEventListener('change', () => {
+    const id = picker.value;
+    const c = companies.find(x => x.id === id);
+    if (c) {
+      const li = $$('#companies-list li').find(el => el.querySelector('.meta')?.textContent.includes('id='+id));
+      selectCompany(c, li);
+    }
+  });
+}
+
+function selectCompany(c, liEl) {
+  STATE.selectedCompany = c;
+  $$('#companies-list li').forEach(el => el.classList.remove('active'));
+  liEl?.classList.add('active');
+  $('#company-picker').value = c.id;
+}
+
+// ============ TEST MODAL ============
+function openTestModal(group, ep) {
+  if (!STATE.token) { toast('Autentique primeiro', 'err'); return; }
+  $('#pm-title').textContent = `${ep.method} ${ep.path}`;
+  const body = $('#pm-body');
+  body.innerHTML = '';
+  const company = STATE.selectedCompany;
+
+  // Build param inputs
+  const inputs = {};
+  (ep.params || []).forEach(p => {
+    const required = p.endsWith('*');
+    const name = required ? p.slice(0,-1) : p;
+    const fld = document.createElement('div'); fld.className = 'field';
+    let defVal = '';
+    if (company) {
+      const id12 = company.id;  // formato unificado 12 dígitos (API atualizada 29/05/2026)
+      if (name === 'client_id' || name === 'company_id') defVal = id12;
+      else if (name === 'client_code') defVal = (company.id || '').slice(0,6);  // legacy fallback
+      else if (name === 'branch_code') defVal = (company.id || '').slice(6);
+      else if (name === 'start_date' || name === 'initial_date') defVal = '2026-01-01';
+      else if (name === 'end_date' || name === 'final_date') defVal = new Date().toISOString().slice(0,10);
+    }
+    fld.innerHTML = `
+      <label>${name}${required?' <span style="color: var(--err)">*</span>':''}</label>
+      <input type="text" name="${name}" value="${defVal}" placeholder="${name}" />
+    `;
+    body.appendChild(fld);
+    inputs[name] = fld.querySelector('input');
+  });
+  if ((ep.params || []).length === 0) {
+    body.innerHTML = '<p style="color: var(--text-muted);">Este endpoint não aceita parâmetros.</p>';
+  }
+
+  $('#pm-run').onclick = async () => {
+    const params = {};
+    for (const k in inputs) {
+      const v = inputs[k].value.trim();
+      if (v) params[k] = v;
+    }
+    closeModal();
+    await runTest(group, ep, params);
+  };
+  $('#params-modal').classList.add('active');
+}
+function closeModal() { $('#params-modal').classList.remove('active'); }
+$('#pm-close').addEventListener('click', closeModal);
+$('#pm-cancel').addEventListener('click', closeModal);
+$('#params-modal').addEventListener('click', (e) => { if (e.target === $('#params-modal')) closeModal(); });
+
+// ============ RUN TEST ============
+async function runTest(group, ep, params) {
+  const url = group.baseUrl + ep.path + (Object.keys(params).length ? '?' + new URLSearchParams(params) : '');
+  const epKey = `${group.group}:${ep.method}:${ep.path}`;
+  const t0 = performance.now();
+  let r, text, status, headers = {};
+  try {
+    r = await fetch(url, {
+      method: ep.method,
+      headers: {
+        'Authorization': `Bearer ${STATE.token.access_token}`,
+        'Accept': 'application/json',
+      },
+    });
+    status = r.status;
+    text = await r.text();
+    r.headers.forEach((v, k) => headers[k] = v);
+  } catch (e) {
+    status = 0;
+    text = `Erro de rede: ${e.message}`;
+  }
+  const ms = Math.round(performance.now() - t0);
+
+  // Update last-status badge
+  const badge = $(`[data-status-for="${CSS.escape(epKey)}"]`);
+  if (badge) {
+    badge.textContent = status || 'ERR';
+    badge.className = `last-status ${statusClass(status)}`;
+  }
+
+  // Show in result panel
+  let bodyPretty = text;
+  try { bodyPretty = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+  const curl = generateCurl(ep.method, url, STATE.token.access_token);
+  STATE.lastResult = { url, status, ms, body: bodyPretty, headers, curl };
+  renderResult();
+
+  // Toast
+  if (status >= 200 && status < 300) toast(`✓ ${status} em ${ms}ms`, 'ok');
+  else toast(`HTTP ${status} em ${ms}ms`, status>=400?'err':'');
+}
+
+function generateCurl(method, url, token) {
+  return `curl -X ${method} '${url}' \\\n  -H 'Authorization: Bearer ${token}' \\\n  -H 'Accept: application/json'`;
+}
+
+function renderResult() {
+  const r = STATE.lastResult; if (!r) return;
+  $('#result-empty').style.display = 'none';
+  $('#result-content').style.display = '';
+  const statusEl = $('#r-status');
+  statusEl.textContent = r.status || 'ERR';
+  statusEl.className = `status ${statusClass(r.status)}`;
+  $('#r-url').textContent = r.url;
+  $('#r-time').textContent = `${r.ms}ms`;
+  $('#result-badge').textContent = r.status || 'ERR';
+  renderResultTab();
+}
+
+function renderResultTab() {
+  const r = STATE.lastResult; if (!r) return;
+  const host = $('#r-tab-body');
+  const tab = STATE.lastResultTab;
+  let content = '';
+  if (tab === 'body') {
+    content = `<button class="btn sm copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(r.body)}); event.target.textContent='✓ copiado';">Copiar</button><pre>${escapeHtml(r.body)}</pre>`;
+  } else if (tab === 'headers') {
+    const lines = Object.entries(r.headers).map(([k,v]) => `${k}: ${v}`).join('\n');
+    content = `<pre>${escapeHtml(lines)}</pre>`;
+  } else if (tab === 'curl') {
+    content = `<button class="btn sm copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(r.curl)}); event.target.textContent='✓ copiado';">Copiar cURL</button><pre>${escapeHtml(r.curl)}</pre>`;
+  }
+  host.innerHTML = content;
+}
+
+$$('.tabs-mini button').forEach(b => b.addEventListener('click', () => {
+  $$('.tabs-mini button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  STATE.lastResultTab = b.dataset.rt;
+  renderResultTab();
+}));
+
+// ============ INIT ============
+renderEndpoints();
+// Auto-auth on load for convenience? No — user clicks button.
+toast('Pronto. Clique Autenticar para começar.', '');
+</script>
+</body>
+</html>

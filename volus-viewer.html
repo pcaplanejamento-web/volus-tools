@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Volus Viewer — Extrato de Cartões & Frota</title>
+  <style>
+    /* ============ TOKENS ============ */
+    :root {
+      --bg-page: #EEF2F8;
+      --bg-grad: radial-gradient(1200px 600px at 8% -10%, rgba(67,97,238,.10), transparent 60%),
+                 radial-gradient(900px 500px at 100% 0%, rgba(149,168,255,.10), transparent 55%),
+                 linear-gradient(180deg, #f6f8fc 0%, #EEF2F8 100%);
+
+      --surface:        rgba(255,255,255,.78);
+      --surface-elev:   rgba(255,255,255,.92);
+      --surface-subtle: rgba(248,250,255,.62);
+      --surface-strong: #ffffff;
+
+      --text:        #1A1F36;
+      --text-strong: #0f172a;
+      --text-muted:  #5F6B7A;
+      --text-subtle: #94a3b8;
+      --text-on-accent: #ffffff;
+
+      --accent:        #4361ee;
+      --accent-strong: #3651cc;
+      --accent-hover:  #5571f0;
+      --accent-bg:     rgba(67,97,238,.12);
+      --accent-bg-subtle: rgba(67,97,238,.07);
+      --accent-border: rgba(67,97,238,.22);
+
+      --border:        rgba(63,81,181,.14);
+      --border-subtle: rgba(63,81,181,.08);
+      --border-strong: #e2e8f0;
+
+      --pos: #16a34a; --pos-bg: rgba(22,163,74,.10);
+      --neg: #dc2626; --neg-bg: rgba(220,38,38,.10);
+      --warn: #f59e0b;
+
+      --radius-sm: 6px;
+      --radius:    10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+      --shadow:    0 4px 10px -2px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
+      --shadow-lg: 0 12px 28px -6px rgba(15,23,42,.14), 0 6px 16px rgba(15,23,42,.06);
+
+      --font:  ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono", monospace;
+    }
+
+    /* ============ BASE ============ */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg-page);
+      background-image: var(--bg-grad);
+      background-attachment: fixed;
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; cursor: pointer; }
+    input, select, textarea { font: inherit; color: inherit; }
+    a { color: var(--accent); }
+
+    /* ============ APP SHELL ============ */
+    .app {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 18px 24px 60px;
+    }
+
+    /* HEADER */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      background: var(--surface-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+      position: sticky; top: 8px; z-index: 30;
+    }
+    .topbar .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text-strong);
+    }
+    .brand-mark {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent) 0%, #6366f1 100%);
+      border-radius: 9px;
+      display: grid; place-items: center;
+      color: white; font-weight: 800; font-size: 14px;
+      box-shadow: 0 4px 12px -2px rgba(67,97,238,.5);
+    }
+    .brand-sub { color: var(--text-muted); font-weight: 500; font-size: 12px; margin-left: 4px; }
+    .topbar .spacer { flex: 1; }
+    .topbar .status {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #cbd5e1;
+    }
+    .status-dot.active { background: var(--pos); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+    .btn:hover { background: var(--surface-elev); border-color: var(--accent-border); }
+    .btn.primary {
+      background: var(--accent); color: var(--text-on-accent); border-color: var(--accent);
+      box-shadow: 0 2px 6px -1px rgba(67,97,238,.4);
+    }
+    .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn.ghost { background: transparent; }
+    .btn.danger { color: var(--neg); }
+    .btn.danger:hover { background: var(--neg-bg); border-color: var(--neg); }
+    .btn.sm { padding: 4px 9px; font-size: 12px; }
+    .btn svg { width: 14px; height: 14px; }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 5px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 14px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .tab {
+      flex-shrink: 0;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 13px;
+      border-radius: 8px;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all .15s;
+    }
+    .tab:hover { color: var(--text); background: var(--accent-bg-subtle); }
+    .tab.active { color: var(--text-on-accent); background: var(--accent); box-shadow: 0 2px 6px -1px rgba(67,97,238,.4); }
+    .tab .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 18px;
+      padding: 0 6px;
+      border-radius: 9px;
+      background: rgba(0,0,0,.08);
+      color: inherit;
+      font-size: 11px; font-weight: 600;
+    }
+    .tab.active .badge { background: rgba(255,255,255,.25); }
+
+    /* PANEL */
+    .panel {
+      background: var(--surface-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .panel-toolbar {
+      display: flex; gap: 10px; align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+    .panel-toolbar .title {
+      font-weight: 600; color: var(--text-strong);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-toolbar .count {
+      font-size: 12px; color: var(--text-muted);
+      padding: 2px 8px; background: var(--accent-bg-subtle); border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+    }
+    .panel-toolbar .grow { flex: 1; }
+    .search-input {
+      padding: 6px 10px 6px 30px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 13px;
+      min-width: 220px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 8px center;
+      background-size: 14px;
+    }
+    .search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg-subtle); }
+
+    /* TABLE */
+    .table-wrap {
+      overflow-x: auto;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    table.data {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+    table.data th, table.data td {
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+    table.data th {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--surface-elev);
+      backdrop-filter: blur(6px);
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom-color: var(--border);
+    }
+    table.data th:hover { color: var(--text); background: var(--accent-bg-subtle); }
+    table.data th.sort-asc::after  { content: " ↑"; color: var(--accent); }
+    table.data th.sort-desc::after { content: " ↓"; color: var(--accent); }
+    table.data tbody tr:hover { background: var(--accent-bg-subtle); }
+    table.data tbody tr:nth-child(2n) { background: rgba(248,250,255,.4); }
+    table.data tbody tr:nth-child(2n):hover { background: var(--accent-bg-subtle); }
+    table.data tfoot td {
+      position: sticky; bottom: 0;
+      background: var(--surface-elev);
+      font-weight: 600;
+      color: var(--text-strong);
+      border-top: 2px solid var(--border);
+      border-bottom: none;
+    }
+    .col-num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+    .col-mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+    .col-strong { color: var(--text-strong); font-weight: 600; }
+
+    .pill {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      background: var(--accent-bg-subtle);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+      white-space: nowrap;
+    }
+    .pill.pos { background: var(--pos-bg); color: var(--pos); border-color: rgba(22,163,74,.25); }
+    .pill.neg { background: var(--neg-bg); color: var(--neg); border-color: rgba(220,38,38,.25); }
+    .pill.warn { background: rgba(245,158,11,.10); color: var(--warn); border-color: rgba(245,158,11,.3); }
+    .pill.muted { background: rgba(148,163,184,.12); color: var(--text-muted); border-color: rgba(148,163,184,.2); }
+
+    /* EMPTY STATE */
+    .empty {
+      padding: 60px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .empty h3 { margin: 0 0 6px; color: var(--text-strong); font-weight: 600; }
+    .empty p { margin: 4px 0; max-width: 540px; margin-left: auto; margin-right: auto; }
+    .empty pre {
+      max-width: 720px; margin: 18px auto;
+      text-align: left;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      font-size: 11px;
+      color: var(--text);
+      overflow-x: auto;
+    }
+    .empty-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 18px;
+      border-radius: 18px;
+      background: var(--accent-bg-subtle);
+      display: grid; place-items: center;
+      color: var(--accent);
+    }
+    .empty-icon svg { width: 32px; height: 32px; }
+
+    /* KPI GRID */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      padding: 14px;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .kpi .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .kpi .value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-strong);
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi .sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .charts {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      padding: 0 14px 14px;
+    }
+    @media (max-width: 880px) { .charts { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+    .chart-card h4 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .barlist { display: flex; flex-direction: column; gap: 6px; }
+    .barlist-row { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 10px; font-size: 12px; }
+    .barlist-bar {
+      height: 18px; background: var(--accent-bg-subtle); border-radius: 4px; position: relative; overflow: hidden;
+    }
+    .barlist-bar .fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--accent) 0%, #6366f1 100%);
+      border-radius: 4px;
+    }
+    .barlist-bar .label {
+      position: relative; z-index: 1;
+      padding: 0 8px; line-height: 18px;
+      font-size: 11px; color: var(--text-strong);
+      font-weight: 500;
+    }
+    .barlist-row .val { text-align: right; color: var(--text-strong); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 12px; }
+
+    /* DROP OVERLAY */
+    .drop-overlay {
+      position: fixed; inset: 0;
+      background: rgba(67,97,238,.10);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .drop-overlay.active { display: flex; }
+    .drop-overlay .inner {
+      background: var(--surface-strong);
+      border: 2px dashed var(--accent);
+      border-radius: var(--radius-xl);
+      padding: 60px 80px;
+      text-align: center;
+      color: var(--accent);
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+    }
+    .drop-overlay svg { width: 48px; height: 48px; margin-bottom: 8px; }
+
+    /* PASTE MODAL */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(8,12,28,.45);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 90;
+      backdrop-filter: blur(4px);
+    }
+    .modal-backdrop.active { display: flex; }
+    .modal {
+      background: var(--surface-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      width: min(720px, calc(100% - 32px));
+      max-height: 80vh;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 600; color: var(--text-strong);
+    }
+    .modal-body { padding: 14px 18px; flex: 1; overflow-y: auto; }
+    .modal-footer { padding: 12px 18px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface-subtle); }
+    .modal textarea {
+      width: 100%;
+      min-height: 320px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      resize: vertical;
+      background: var(--surface-subtle);
+    }
+    .modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg-subtle); }
+    .modal .hint { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .modal-close { background: transparent; border: 0; color: var(--text-muted); padding: 2px 6px; border-radius: 4px; margin-left: auto; }
+    .modal-close:hover { background: var(--accent-bg-subtle); color: var(--accent); }
+
+    /* SOURCES LIST */
+    .sources {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex; flex-wrap: wrap; gap: 6px;
+      font-size: 11px;
+    }
+    .source-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+    .source-chip strong { color: var(--text-strong); font-weight: 600; }
+    .source-chip .x { color: var(--text-subtle); cursor: pointer; padding: 0 2px; border-radius: 3px; }
+    .source-chip .x:hover { color: var(--neg); background: var(--neg-bg); }
+
+    /* TAB CONTENT */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* RAW JSON VIEWER */
+    .raw-json {
+      padding: 14px;
+      max-height: 75vh;
+      overflow: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      background: var(--surface-subtle);
+    }
+    .json-file { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); margin-bottom: 12px; padding: 10px 12px; }
+    .json-file h5 { margin: 0 0 6px; font-size: 12px; color: var(--text-strong); display: flex; gap: 8px; align-items: center; }
+    .json-file pre { margin: 0; max-height: 280px; overflow: auto; font-size: 11px; background: transparent; }
+
+    /* TOAST */
+    .toast-host {
+      position: fixed; bottom: 22px; right: 22px; z-index: 200;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      background: var(--surface-strong);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      min-width: 240px;
+      max-width: 380px;
+      animation: slideIn .25s ease-out;
+    }
+    .toast.error { border-left-color: var(--neg); }
+    .toast.ok { border-left-color: var(--pos); }
+    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* responsive */
+    @media (max-width: 720px) {
+      .topbar { flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius-lg); }
+      .app { padding: 12px 14px 40px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">V</div>
+        <span>Volus Viewer</span>
+        <span class="brand-sub">Extrato · Cartões · Frota</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Sem dados carregados</span>
+      </div>
+      <input id="file-input" type="file" accept=".json,application/json,.pdf,application/pdf" multiple hidden />
+      <button class="btn" id="btn-paste">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Colar JSON
+      </button>
+      <button class="btn primary" id="btn-upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Carregar arquivos
+      </button>
+      <button class="btn ghost" id="btn-sample" title="Carregar dados de demonstração">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Demo
+      </button>
+      <button class="btn danger ghost" id="btn-clear" title="Limpar todos os dados">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+    </header>
+
+    <!-- TABS -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="resumo" role="tab">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        Resumo
+      </button>
+      <button class="tab" data-tab="empresas" role="tab">
+        Empresas <span class="badge" id="badge-empresas">0</span>
+      </button>
+      <button class="tab" data-tab="credit" role="tab">
+        Cartão de Crédito <span class="badge" id="badge-credit">0</span>
+      </button>
+      <button class="tab" data-tab="fuel" role="tab">
+        Frota · Combustível <span class="badge" id="badge-fuel">0</span>
+      </button>
+      <button class="tab" data-tab="maint" role="tab">
+        Frota · Manutenção <span class="badge" id="badge-maint">0</span>
+      </button>
+      <button class="tab" data-tab="raw" role="tab">
+        JSON Bruto <span class="badge" id="badge-raw">0</span>
+      </button>
+    </nav>
+
+    <!-- TAB: RESUMO -->
+    <section class="tab-content active" data-tab-content="resumo">
+      <div class="panel" id="panel-resumo">
+        <div class="panel-toolbar">
+          <span class="title">Resumo</span>
+          <span class="grow"></span>
+          <span class="count" id="resumo-period">—</span>
+        </div>
+        <div class="kpi-grid" id="kpi-grid">
+          <!-- KPIs injected by JS -->
+        </div>
+        <div class="charts" id="charts">
+          <!-- Top barlists injected by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: EMPRESAS -->
+    <section class="tab-content" data-tab-content="empresas">
+      <div class="panel">
+        <div class="panel-toolbar">
+          <span class="title">Empresas autorizadas</span>
+          <span class="count" id="empresas-count">0</span>
+          <span class="grow"></span>
+          <input class="search-input" data-search-for="empresas" placeholder="Buscar nome, CNPJ…" />
+          <button class="btn sm" data-export="empresas">Exportar CSV</button>
+        </div>
+        <div class="table-wrap"><table class="data" id="t-empresas"></table></div>
+      </div>
+    </section>
+
+    <!-- TAB: CARTÃO DE CRÉDITO -->
+    <section class="tab-content" data-tab-content="credit">
+      <div class="panel">
+        <div class="panel-toolbar">
+          <span class="title">Transações — Cartão de Crédito</span>
+          <span class="count" id="credit-count">0</span>
+          <span class="grow"></span>
+          <input class="search-input" data-search-for="credit" placeholder="Buscar estabelecimento, MCC, cidade…" />
+          <button class="btn sm" data-export="credit">Exportar CSV</button>
+        </div>
+        <div class="sources" id="sources-credit" hidden></div>
+        <div class="table-wrap"><table class="data" id="t-credit"></table></div>
+      </div>
+    </section>
+
+    <!-- TAB: FROTA COMBUSTÍVEL -->
+    <section class="tab-content" data-tab-content="fuel">
+      <div class="panel">
+        <div class="panel-toolbar">
+          <span class="title">Abastecimentos — Frota</span>
+          <span class="count" id="fuel-count">0</span>
+          <span class="grow"></span>
+          <input class="search-input" data-search-for="fuel" placeholder="Buscar placa, posto, produto…" />
+          <button class="btn sm" data-export="fuel">Exportar CSV</button>
+        </div>
+        <div class="sources" id="sources-fuel" hidden></div>
+        <div class="table-wrap"><table class="data" id="t-fuel"></table></div>
+      </div>
+    </section>
+
+    <!-- TAB: FROTA MANUTENÇÃO -->
+    <section class="tab-content" data-tab-content="maint">
+      <div class="panel">
+        <div class="panel-toolbar">
+          <span class="title">Manutenções — Frota</span>
+          <span class="count" id="maint-count">0</span>
+          <span class="grow"></span>
+          <input class="search-input" data-search-for="maint" placeholder="Buscar ordem, placa, oficina…" />
+          <button class="btn sm" data-export="maint">Exportar CSV</button>
+        </div>
+        <div class="sources" id="sources-maint" hidden></div>
+        <div class="table-wrap"><table class="data" id="t-maint"></table></div>
+      </div>
+    </section>
+
+    <!-- TAB: RAW JSON -->
+    <section class="tab-content" data-tab-content="raw">
+      <div class="panel">
+        <div class="panel-toolbar">
+          <span class="title">Arquivos carregados</span>
+          <span class="count" id="raw-count">0</span>
+        </div>
+        <div class="raw-json" id="raw-json">
+          <div class="empty">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <h3>Nenhum arquivo carregado</h3>
+            <p>Arraste arquivos JSON aqui ou use os botões no topo.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- DROP OVERLAY -->
+  <div class="drop-overlay" id="drop-overlay">
+    <div class="inner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div>Solte arquivos JSON ou PDF (relatórios Vólus) aqui</div>
+    </div>
+  </div>
+
+  <!-- PASTE MODAL -->
+  <div class="modal-backdrop" id="paste-modal">
+    <div class="modal">
+      <div class="modal-header">
+        Colar JSON da API Vólus
+        <button class="modal-close" id="paste-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint">Cole a resposta de <code>/v1/partners/auth/token</code>, <code>/v1/credit-card/statement</code>, <code>/v1/fleet/fuel/statement</code>, <code>/v1/fleet/maintenance/statement</code>, ou um JSON combinado <code>{auth, credit_card_statements, fleet_fuel, fleet_maintenance}</code>. Para arquivos <code>.pdf</code> do portal Vólus (relatório "CONSUMO GERAL DA FROTA"), use o botão <strong>Carregar arquivos</strong> ou arraste-os.</p>
+        <textarea id="paste-text" placeholder='{ "transactions": [ ... ] }'></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="paste-cancel">Cancelar</button>
+        <button class="btn primary" id="paste-confirm">Carregar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-host" id="toast-host"></div>
+
+<script>
+'use strict';
+
+// ============================================================
+// STATE
+// ============================================================
+const STATE = {
+  files: [],           // [{name, raw, type, addedAt}]
+  auth: null,          // last seen auth response
+  empresas: new Map(), // id -> {id, name, tax_id, source}
+  credit: [],          // [{...transaction, _company, _card, _source}]
+  fuel: [],
+  maint: [],
+  filters: {},         // tab -> query string
+  sort:    {},         // tab -> {col, dir}
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const el = (tag, attrs = {}, ...children) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'data') Object.entries(v).forEach(([dk, dv]) => e.dataset[dk] = dv);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c == null || c === false) continue;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return e;
+};
+
+const fmtBRL = (n) => {
+  if (n == null || n === '' || isNaN(+n)) return '—';
+  return (+n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+const fmtNum = (n, dec = 2) => {
+  if (n == null || n === '' || isNaN(+n)) return '—';
+  return (+n).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+};
+const fmtDate = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const fmtDateShort = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('pt-BR');
+};
+const fmtCNPJ = (v) => {
+  if (!v) return '—';
+  const d = String(v).replace(/\D/g, '');
+  if (d.length !== 14) return v;
+  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+};
+const safe = (v, fallback = '—') => (v == null || v === '' ? fallback : v);
+const nz = (v) => (v == null || v === '' ? 0 : +v) || 0;
+
+const toast = (msg, kind = '') => {
+  const t = el('div', { class: `toast ${kind}` }, msg);
+  $('#toast-host').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+};
+
+// ============================================================
+// DETECTION + INGESTION
+// ============================================================
+function detectType(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+
+  // Combined wrapper
+  if (obj.auth || obj.credit_card_statements || obj.fleet_fuel || obj.fleet_maintenance) {
+    return 'combined';
+  }
+  // Auth response
+  if (obj.access_token && (obj.companies || obj.scope)) return 'auth';
+
+  // Statement responses
+  const tx = obj?.transactions?.[0];
+  if (tx) {
+    if ('refuel_datetime' in tx) return 'fleetFuel';
+    if ('order_id' in tx && 'transaction_datetime' in tx) return 'fleetMaintenance';
+    if ('transaction_category' in tx || 'authorization_code' in tx || 'operation_type' in tx) return 'creditCard';
+    return 'unknownTransactions';
+  }
+
+  // Arrays directly
+  if (Array.isArray(obj)) {
+    if (!obj[0]) return null;
+    if ('refuel_datetime' in obj[0]) return 'fleetFuelArr';
+    if ('order_id' in obj[0]) return 'fleetMaintenanceArr';
+    if ('transaction_category' in obj[0]) return 'creditCardArr';
+  }
+
+  return null;
+}
+
+function ingestAuth(auth) {
+  STATE.auth = auth;
+  (auth.companies || []).forEach((c) => {
+    if (c && c.id) STATE.empresas.set(c.id, { ...c, source: '(auth)' });
+  });
+}
+function ingestCredit(txs, ctx) {
+  txs.forEach((t) => STATE.credit.push({ ...t, _ctx: ctx }));
+}
+function ingestFuel(txs, ctx) {
+  txs.forEach((t) => STATE.fuel.push({ ...t, _ctx: ctx }));
+}
+function ingestMaint(txs, ctx) {
+  txs.forEach((t) => STATE.maint.push({ ...t, _ctx: ctx }));
+}
+
+function ingest(obj, sourceName) {
+  const type = detectType(obj);
+  const ctx = { source: sourceName };
+
+  if (type === 'auth') {
+    ingestAuth(obj);
+    return ['auth', (obj.companies || []).length];
+  }
+  if (type === 'creditCard') {
+    ingestCredit(obj.transactions, ctx);
+    return ['credit', obj.transactions.length];
+  }
+  if (type === 'fleetFuel') {
+    ingestFuel(obj.transactions, ctx);
+    return ['fuel', obj.transactions.length];
+  }
+  if (type === 'fleetMaintenance') {
+    ingestMaint(obj.transactions, ctx);
+    return ['maint', obj.transactions.length];
+  }
+  if (type === 'creditCardArr')        { ingestCredit(obj, ctx); return ['credit', obj.length]; }
+  if (type === 'fleetFuelArr')         { ingestFuel(obj, ctx);   return ['fuel', obj.length]; }
+  if (type === 'fleetMaintenanceArr')  { ingestMaint(obj, ctx);  return ['maint', obj.length]; }
+
+  if (type === 'combined') {
+    let counts = { auth: 0, credit: 0, fuel: 0, maint: 0 };
+    if (obj.auth) { ingestAuth(obj.auth); counts.auth = (obj.auth.companies || []).length; }
+    (obj.credit_card_statements || []).forEach((s) => {
+      const txs = s.response?.transactions || s.transactions || [];
+      ingestCredit(txs, { company_id: s.company_id, card_id: s.card_id, source: sourceName });
+      counts.credit += txs.length;
+    });
+    (obj.fleet_fuel || []).forEach((s) => {
+      const txs = s.response?.transactions || s.transactions || [];
+      ingestFuel(txs, { company_id: s.company_id, branch_code: s.branch_code, source: sourceName });
+      counts.fuel += txs.length;
+    });
+    (obj.fleet_maintenance || []).forEach((s) => {
+      const txs = s.response?.transactions || s.transactions || [];
+      ingestMaint(txs, { company_id: s.company_id, branch_code: s.branch_code, source: sourceName });
+      counts.maint += txs.length;
+    });
+    return ['combined', counts];
+  }
+
+  return [null, 0];
+}
+
+// ============================================================
+// FILE LOADING
+// ============================================================
+function loadJsonText(text, sourceName) {
+  let obj;
+  try { obj = JSON.parse(text); }
+  catch (e) {
+    toast(`Erro ao parsear ${sourceName}: ${e.message}`, 'error');
+    return null;
+  }
+  const file = { name: sourceName, raw: obj, type: detectType(obj), addedAt: new Date() };
+  STATE.files.push(file);
+  const [kind, count] = ingest(obj, sourceName);
+  if (!kind) {
+    toast(`Tipo não reconhecido em ${sourceName}`, 'error');
+  } else if (typeof count === 'object') {
+    toast(`${sourceName}: ${count.credit || 0} crédito, ${count.fuel || 0} comb., ${count.maint || 0} manut., ${count.auth || 0} empresas`, 'ok');
+  } else {
+    const labels = { auth: 'empresas', credit: 'transações crédito', fuel: 'abastecimentos', maint: 'manutenções' };
+    toast(`${sourceName}: +${count} ${labels[kind]}`, 'ok');
+  }
+  renderAll();
+  return file;
+}
+
+async function loadFiles(fileList) {
+  for (const f of fileList) {
+    try {
+      const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+      if (isPdf) {
+        await loadPdfFile(f);
+      } else {
+        const text = await f.text();
+        loadJsonText(text, f.name);
+      }
+    } catch (e) {
+      toast(`Erro lendo ${f.name}: ${e.message}`, 'error');
+    }
+  }
+}
+
+// ============================================================
+// PDF PARSING — Relatórios do portal Vólus
+// ============================================================
+async function ensurePdfJs() {
+  if (window.pdfjsLib) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Falha ao carregar pdf.js (precisa de internet)'));
+    document.head.appendChild(s);
+  });
+  if (!window.pdfjsLib) throw new Error('pdf.js não inicializou');
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+async function pdfToText(file) {
+  await ensurePdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  const lines = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const byY = new Map();
+    for (const item of content.items) {
+      const y = Math.round(item.transform[5]);
+      if (!byY.has(y)) byY.set(y, []);
+      byY.get(y).push({ x: item.transform[4], str: item.str });
+    }
+    const ys = [...byY.keys()].sort((a, b) => b - a);
+    for (const y of ys) {
+      const sorted = byY.get(y).sort((a, b) => a.x - b.x);
+      lines.push(sorted.map((s) => s.str).join(' ').replace(/\s+/g, ' ').trim());
+    }
+  }
+  return lines.filter(Boolean).join('\n');
+}
+
+async function loadPdfFile(file) {
+  toast(`Processando ${file.name}…`);
+  const text = await pdfToText(file);
+
+  // Try to recognize "CONSUMO GERAL DA FROTA"
+  if (/CONSUMO GERAL DA FROTA/i.test(text)) {
+    const parsed = parseConsumoGeralFrota(text);
+    const txCount = parsed.fleet_maintenance?.[0]?.response?.transactions?.length || 0;
+    if (txCount === 0) {
+      toast(`Nenhuma transação encontrada em ${file.name}`, 'error');
+      return;
+    }
+    STATE.files.push({ name: file.name, raw: parsed, type: 'Vólus · Consumo Geral Frota (PDF)', addedAt: new Date() });
+    ingest(parsed, file.name);
+    renderAll();
+    return;
+  }
+
+  toast(`Formato de PDF não reconhecido em ${file.name}`, 'error');
+}
+
+const BRL = (s) => Number(String(s || '').replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')) || 0;
+
+function parseConsumoGeralFrota(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+
+  let empresa = null, cnpjEmpresa = null, codigo = null;
+  let periodoStart = null, periodoEnd = null;
+  let centroCusto = null, departamento = null;
+  let cardPlate = null, cardModel = null, cardRenavam = null;
+  const transactions = [];
+
+  const RE_EMPRESA  = /EMPRESA:\s+(.+?)\s+PLANO/i;
+  const RE_CNPJ_HEAD = /CNPJ:\s+(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i;
+  const RE_CODIGO   = /CÓDIGO:\s+(\d{6}-\d{6})/i;
+  const RE_PERIODO  = /PERÍODO:\s+(\d{2}\/\d{2}\/\d{4})\s+a\s+(\d{2}\/\d{2}\/\d{4})/i;
+  const RE_CENTRO   = /^Centro de Custo:\s+(.+)$/i;
+  const RE_DEPT     = /^Departamento:\s+(.+)$/i;
+  const RE_CARTAO   = /^Cartão:\s+([A-Z0-9]{6,8})\s*-\s*(.+)$/;
+  const RE_TX       = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d+)\s+(.+?)\s+(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+([\d.,]+)$/;
+
+  // Mark "Departamento:" lines that are followed by a totals block (no Cartão before next data) — these are footers, not new dept
+  // Simple heuristic: track the last departamento header; subsequent "Departamento:" with same name = footer, ignore
+
+  for (const line of lines) {
+    let m;
+    if ((m = line.match(RE_EMPRESA))   && !empresa)       empresa = m[1].trim();
+    if ((m = line.match(RE_CNPJ_HEAD)) && !cnpjEmpresa)   cnpjEmpresa = m[1];
+    if ((m = line.match(RE_CODIGO))    && !codigo)        codigo = m[1];
+    if ((m = line.match(RE_PERIODO))   && !periodoStart) { periodoStart = m[1]; periodoEnd = m[2]; }
+
+    if ((m = line.match(RE_CENTRO))) {
+      centroCusto = m[1].trim();
+      departamento = null;
+      cardPlate = null; cardModel = null; cardRenavam = null;
+      continue;
+    }
+    if ((m = line.match(RE_DEPT))) {
+      // Update only if it differs from current OR if we already had a card
+      const name = m[1].trim();
+      if (name !== departamento || cardPlate) {
+        departamento = name;
+        cardPlate = null; cardModel = null; cardRenavam = null;
+      }
+      continue;
+    }
+    if ((m = line.match(RE_CARTAO))) {
+      cardPlate = m[1];
+      let rest = m[2];
+      const rn = rest.match(/^(.+?)\s+-\s+Renavam:\s+(\S+)$/i);
+      if (rn) { cardModel = rn[1].trim(); cardRenavam = rn[2]; }
+      else    { cardModel = rest.trim(); cardRenavam = null; }
+      continue;
+    }
+    if ((m = line.match(RE_TX))) {
+      const [, dd, mm, yyyy, ordNum, middle, cnpj, valorStr] = m;
+      // Parse middle: "<estab> [nf_produto] [nf_servico]"
+      const tokens = middle.trim().split(/\s+/);
+      const nfs = [];
+      while (tokens.length > 0 && /^[\d.\-]+$/.test(tokens[tokens.length - 1])) {
+        nfs.unshift(tokens.pop());
+      }
+      const estab = tokens.join(' ').trim();
+      const valor = BRL(valorStr);
+      let nfProduto = null, nfServico = null;
+      if (nfs.length >= 2) { nfProduto = nfs[0]; nfServico = nfs[1]; }
+      else if (nfs.length === 1) { nfProduto = nfs[0]; }
+
+      const unitName = [centroCusto, departamento].filter(Boolean).join(' / ');
+      transactions.push({
+        order_id: ordNum,
+        transaction_datetime: `${yyyy}-${mm}-${dd}T12:00:00`,
+        card: {
+          plate: cardPlate || '—',
+          model_name: cardModel || '',
+          brand_name: '',
+          card_masked: cardPlate || '',
+          manufacture_year: null,
+        },
+        unit: { name: unitName, code: '' },
+        merchant: {
+          name: estab,
+          cnpj,
+          legal_name: '',
+          address: {},
+          contact: {},
+          geo_location: {},
+        },
+        purchase_order: {},
+        invoice: {
+          product_invoice_number: nfProduto,
+          service_invoice_number: nfServico,
+        },
+        products: [{ name: 'Manutenção', quantity: '1', unit_price: String(valor), total_value: String(valor) }],
+        operator: {},
+        maintenance_context: { maintenance_type: '', usage_metric: '' },
+        _renavam: cardRenavam,
+      });
+    }
+  }
+
+  const company = empresa ? [{
+    id: codigo || '',
+    name: empresa,
+    tax_id: (cnpjEmpresa || '').replace(/\D/g, ''),
+  }] : [];
+
+  return {
+    auth: company.length ? { companies: company } : null,
+    fleet_maintenance: transactions.length ? [{
+      company_id: codigo || '',
+      period_start: periodoStart,
+      period_end: periodoEnd,
+      response: { transactions },
+    }] : [],
+  };
+}
+
+// ============================================================
+// TABLE BUILDING
+// ============================================================
+function getValue(row, path) {
+  return path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), row);
+}
+
+function buildTable(tabKey, data, columns) {
+  const table = $(`#t-${tabKey}`);
+  table.innerHTML = '';
+  const query = (STATE.filters[tabKey] || '').toLowerCase().trim();
+  const sortInfo = STATE.sort[tabKey];
+
+  // Filter
+  let rows = data;
+  if (query) {
+    rows = rows.filter((r) =>
+      columns.some((c) => {
+        const v = c.value ? c.value(r) : getValue(r, c.key);
+        return v != null && String(v).toLowerCase().includes(query);
+      })
+    );
+  }
+
+  // Sort
+  if (sortInfo) {
+    const col = columns.find((c) => c.key === sortInfo.col);
+    if (col) {
+      rows = [...rows].sort((a, b) => {
+        const va = col.sortValue ? col.sortValue(a) : col.value ? col.value(a) : getValue(a, col.key);
+        const vb = col.sortValue ? col.sortValue(b) : col.value ? col.value(b) : getValue(b, col.key);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (typeof va === 'number' && typeof vb === 'number') return sortInfo.dir * (va - vb);
+        return sortInfo.dir * String(va).localeCompare(String(vb), 'pt-BR', { numeric: true });
+      });
+    }
+  }
+
+  // HEAD
+  const thead = el('thead');
+  const headRow = el('tr');
+  columns.forEach((c) => {
+    const th = el('th', {
+      onclick: () => {
+        const cur = STATE.sort[tabKey];
+        if (cur && cur.col === c.key) {
+          STATE.sort[tabKey] = cur.dir === 1 ? { col: c.key, dir: -1 } : null;
+        } else {
+          STATE.sort[tabKey] = { col: c.key, dir: 1 };
+        }
+        renderAll();
+      },
+    }, c.title);
+    if (c.numeric) th.style.textAlign = 'right';
+    if (sortInfo && sortInfo.col === c.key) {
+      th.classList.add(sortInfo.dir === 1 ? 'sort-asc' : 'sort-desc');
+    }
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  // BODY
+  const tbody = el('tbody');
+  if (rows.length === 0) {
+    tbody.appendChild(el('tr', {},
+      el('td', { colspan: columns.length, style: 'padding: 40px; text-align: center; color: var(--text-muted);' },
+        STATE.files.length === 0 ? 'Nenhum dado carregado ainda.' : 'Nenhum registro corresponde ao filtro.')
+    ));
+  } else {
+    rows.forEach((r) => {
+      const tr = el('tr');
+      columns.forEach((c) => {
+        const v = c.value ? c.value(r) : getValue(r, c.key);
+        const td = el('td');
+        if (c.render) {
+          const out = c.render(r, v);
+          if (typeof out === 'string') td.innerHTML = out;
+          else if (out) td.appendChild(out);
+        } else {
+          td.textContent = v == null || v === '' ? '—' : String(v);
+        }
+        if (c.numeric) td.classList.add('col-num');
+        if (c.mono) td.classList.add('col-mono');
+        if (c.strong) td.classList.add('col-strong');
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+  table.appendChild(tbody);
+
+  // FOOT (totals)
+  const hasTotals = columns.some((c) => c.total);
+  if (hasTotals && rows.length > 0) {
+    const tfoot = el('tfoot');
+    const tr = el('tr');
+    columns.forEach((c, i) => {
+      const td = el('td');
+      if (i === 0) td.textContent = `Total (${rows.length})`;
+      else if (c.total) {
+        const sum = rows.reduce((acc, r) => acc + nz(c.sortValue ? c.sortValue(r) : c.value ? c.value(r) : getValue(r, c.key)), 0);
+        td.textContent = c.format ? c.format(sum) : fmtBRL(sum);
+        if (c.numeric) td.classList.add('col-num');
+      }
+      tr.appendChild(td);
+    });
+    tfoot.appendChild(tr);
+    table.appendChild(tfoot);
+  }
+
+  return rows;
+}
+
+// ============================================================
+// COLUMN DEFINITIONS
+// ============================================================
+const COLS_EMPRESAS = [
+  { key: 'id',     title: 'ID',   mono: true },
+  { key: 'name',   title: 'Nome', strong: true },
+  { key: 'tax_id', title: 'CNPJ', mono: true, render: (r, v) => fmtCNPJ(v) },
+  { key: '_source', title: 'Fonte', value: (r) => r.source || '—' },
+];
+
+const COLS_CREDIT = [
+  { key: 'date', title: 'Data',
+    value: (r) => r.date,
+    sortValue: (r) => r.date ? new Date(r.date).getTime() : 0,
+    render: (r) => fmtDate(r.date) },
+  { key: 'merchant.name', title: 'Estabelecimento', strong: true,
+    value: (r) => r.merchant?.name || '—' },
+  { key: 'merchant.city', title: 'Cidade/UF',
+    value: (r) => [r.merchant?.city, r.merchant?.state].filter(Boolean).join('/') },
+  { key: 'merchant.mcc', title: 'MCC', mono: true,
+    value: (r) => r.merchant?.mcc },
+  { key: 'transaction_category', title: 'Categoria',
+    render: (r, v) => v ? `<span class="pill muted">${v}</span>` : '—' },
+  { key: 'operation_type', title: 'Tipo',
+    render: (r, v) => {
+      if (!v) return '—';
+      const cls = String(v).toLowerCase().includes('cred') ? 'pos' : 'neg';
+      return `<span class="pill ${cls}">${v}</span>`;
+    }},
+  { key: 'signal', title: 'Sinal',
+    render: (r, v) => v === '+' ? '<span class="pill pos">+</span>' : v === '-' ? '<span class="pill neg">−</span>' : (v || '—') },
+  { key: 'status', title: 'Status',
+    render: (r, v) => v ? `<span class="pill ${String(v).toLowerCase().includes('approv') || String(v).toLowerCase().includes('confirm') ? 'pos' : 'muted'}">${v}</span>` : '—' },
+  { key: 'amount', title: 'Valor', numeric: true, total: true,
+    sortValue: (r) => +r.amount || 0,
+    render: (r, v) => fmtBRL(v) },
+  { key: 'installments', title: 'Parcela',
+    value: (r) => r.installments ? `${r.installments.current}/${r.installments.total}` : '' },
+  { key: 'authorization_code', title: 'Auth', mono: true },
+];
+
+const COLS_FUEL = [
+  { key: 'refuel_datetime', title: 'Data',
+    sortValue: (r) => r.refuel_datetime ? new Date(r.refuel_datetime).getTime() : 0,
+    render: (r) => fmtDate(r.refuel_datetime) },
+  { key: 'card.plate', title: 'Placa', mono: true, strong: true,
+    value: (r) => r.card?.plate || r.card?.prefix },
+  { key: 'vehicle', title: 'Veículo',
+    value: (r) => [r.card?.brand_name, r.card?.model_name].filter(Boolean).join(' ') },
+  { key: 'operator', title: 'Operador',
+    value: (r) => r.operator?.name },
+  { key: 'merchant.name', title: 'Posto', strong: true,
+    value: (r) => r.merchant?.name },
+  { key: 'city', title: 'Cidade/UF',
+    value: (r) => [r.merchant?.address?.city, r.merchant?.address?.state].filter(Boolean).join('/') },
+  { key: 'product', title: 'Produto',
+    value: (r) => (r.product || []).map((p) => p?.name).filter(Boolean).join(', ') },
+  { key: 'qty', title: 'Qtd.', numeric: true,
+    value: (r) => (r.product || []).reduce((acc, p) => acc + nz(p?.quantity), 0),
+    render: (r, v) => v ? fmtNum(v, 3) : '—' },
+  { key: 'unit_price', title: 'R$/un', numeric: true,
+    value: (r) => {
+      const p = (r.product || [])[0];
+      return p ? nz(p.unit_price) : 0;
+    },
+    render: (r, v) => v ? fmtBRL(v) : '—' },
+  { key: 'total', title: 'Total', numeric: true, total: true,
+    sortValue: (r) => (r.product || []).reduce((acc, p) => acc + nz(p?.total_value), 0),
+    value: (r) => (r.product || []).reduce((acc, p) => acc + nz(p?.total_value), 0),
+    render: (r, v) => fmtBRL(v) },
+  { key: 'distance', title: 'Hodômetro',
+    value: (r) => r.accumulated_distance ? `${r.accumulated_distance} km` : '—' },
+  { key: 'consumption', title: 'Consumo',
+    value: (r) => r.average_consumption ? `${r.average_consumption}` : '—' },
+  { key: 'commitment', title: 'Empenho', mono: true,
+    value: (r) => r.purchase_order?.commitment_number },
+  { key: 'unit', title: 'Unidade',
+    value: (r) => r.unit?.name || r.unit?.description },
+];
+
+const COLS_MAINT = [
+  { key: 'transaction_datetime', title: 'Data',
+    sortValue: (r) => r.transaction_datetime ? new Date(r.transaction_datetime).getTime() : 0,
+    render: (r) => fmtDate(r.transaction_datetime) },
+  { key: 'order_id', title: 'Ordem', mono: true, strong: true },
+  { key: 'card.plate', title: 'Placa', mono: true,
+    value: (r) => r.card?.plate || r.card?.prefix },
+  { key: 'vehicle', title: 'Veículo',
+    value: (r) => [r.card?.brand_name, r.card?.model_name].filter(Boolean).join(' ') },
+  { key: 'operator', title: 'Operador',
+    value: (r) => r.operator?.name },
+  { key: 'merchant.name', title: 'Oficina', strong: true,
+    value: (r) => r.merchant?.name },
+  { key: 'city', title: 'Cidade/UF',
+    value: (r) => [r.merchant?.address?.city, r.merchant?.address?.state].filter(Boolean).join('/') },
+  { key: 'maintenance_type', title: 'Tipo',
+    value: (r) => r.maintenance_context?.maintenance_type,
+    render: (r, v) => v ? `<span class="pill muted">${v}</span>` : '—' },
+  { key: 'usage_metric', title: 'Hodômetro',
+    value: (r) => r.maintenance_context?.usage_metric },
+  { key: 'nf_pecas', title: 'NF Peças', mono: true,
+    value: (r) => r.invoice?.product_invoice_number },
+  { key: 'nf_serv', title: 'NF Serv.', mono: true,
+    value: (r) => r.invoice?.service_invoice_number },
+  { key: 'total', title: 'Total', numeric: true, total: true,
+    sortValue: (r) => (r.products || []).reduce((acc, p) => acc + nz(p?.total_value), 0),
+    value: (r) => (r.products || []).reduce((acc, p) => acc + nz(p?.total_value), 0),
+    render: (r, v) => fmtBRL(v) },
+  { key: 'items', title: 'Itens', numeric: true,
+    value: (r) => (r.products || []).length },
+  { key: 'commitment', title: 'Empenho', mono: true,
+    value: (r) => r.purchase_order?.commitment_number },
+  { key: 'unit', title: 'Unidade',
+    value: (r) => r.unit?.name || r.unit?.description },
+];
+
+// ============================================================
+// RENDERERS
+// ============================================================
+function renderAll() {
+  renderResumo();
+  renderEmpresas();
+  renderCredit();
+  renderFuel();
+  renderMaint();
+  renderRaw();
+  renderStatus();
+  renderBadges();
+}
+
+function renderStatus() {
+  const total = STATE.empresas.size + STATE.credit.length + STATE.fuel.length + STATE.maint.length;
+  const dot = $('#status-dot'); const text = $('#status-text');
+  if (total === 0) {
+    dot.classList.remove('active');
+    text.textContent = 'Sem dados carregados';
+  } else {
+    dot.classList.add('active');
+    text.textContent = `${STATE.files.length} arquivo${STATE.files.length === 1 ? '' : 's'} · ${total.toLocaleString('pt-BR')} registros`;
+  }
+}
+
+function renderBadges() {
+  $('#badge-empresas').textContent = STATE.empresas.size;
+  $('#badge-credit').textContent = STATE.credit.length;
+  $('#badge-fuel').textContent = STATE.fuel.length;
+  $('#badge-maint').textContent = STATE.maint.length;
+  $('#badge-raw').textContent = STATE.files.length;
+  $('#empresas-count').textContent = `${STATE.empresas.size} registros`;
+  $('#credit-count').textContent = `${STATE.credit.length} registros`;
+  $('#fuel-count').textContent = `${STATE.fuel.length} registros`;
+  $('#maint-count').textContent = `${STATE.maint.length} registros`;
+  $('#raw-count').textContent = `${STATE.files.length} arquivos`;
+}
+
+function renderResumo() {
+  const totalCredit = STATE.credit.reduce((a, r) => a + nz(r.amount), 0);
+  const totalFuel = STATE.fuel.reduce((a, r) => a + (r.product || []).reduce((s, p) => s + nz(p?.total_value), 0), 0);
+  const totalMaint = STATE.maint.reduce((a, r) => a + (r.products || []).reduce((s, p) => s + nz(p?.total_value), 0), 0);
+  const total = totalCredit + totalFuel + totalMaint;
+
+  // Period
+  const allDates = [
+    ...STATE.credit.map((r) => r.date),
+    ...STATE.fuel.map((r) => r.refuel_datetime),
+    ...STATE.maint.map((r) => r.transaction_datetime),
+  ].filter(Boolean).map((d) => new Date(d).getTime()).filter((t) => !isNaN(t));
+  let period = '—';
+  if (allDates.length > 0) {
+    const min = new Date(Math.min(...allDates));
+    const max = new Date(Math.max(...allDates));
+    period = `${min.toLocaleDateString('pt-BR')} → ${max.toLocaleDateString('pt-BR')}`;
+  }
+  $('#resumo-period').textContent = period;
+
+  // KPI cards
+  const grid = $('#kpi-grid');
+  grid.innerHTML = '';
+  const kpis = [
+    { label: 'Empresas', value: STATE.empresas.size.toLocaleString('pt-BR'),
+      sub: STATE.auth?.scope ? `${STATE.auth.scope.length} serviços` : null },
+    { label: 'Valor total', value: fmtBRL(total),
+      sub: `${(STATE.credit.length + STATE.fuel.length + STATE.maint.length).toLocaleString('pt-BR')} transações` },
+    { label: 'Cartão Crédito', value: fmtBRL(totalCredit),
+      sub: `${STATE.credit.length.toLocaleString('pt-BR')} transações` },
+    { label: 'Frota · Combustível', value: fmtBRL(totalFuel),
+      sub: `${STATE.fuel.length.toLocaleString('pt-BR')} abastecimentos` },
+    { label: 'Frota · Manutenção', value: fmtBRL(totalMaint),
+      sub: `${STATE.maint.length.toLocaleString('pt-BR')} ordens` },
+  ];
+  kpis.forEach((k) => {
+    grid.appendChild(el('div', { class: 'kpi' },
+      el('div', { class: 'label' }, k.label),
+      el('div', { class: 'value' }, k.value),
+      k.sub ? el('div', { class: 'sub' }, k.sub) : null,
+    ));
+  });
+
+  // Charts
+  const chartsHost = $('#charts');
+  chartsHost.innerHTML = '';
+
+  if (STATE.empresas.size === 0 && STATE.credit.length + STATE.fuel.length + STATE.maint.length === 0) {
+    chartsHost.appendChild(emptyCard());
+    return;
+  }
+
+  // Top estabelecimentos
+  const merchants = {};
+  STATE.credit.forEach((r) => {
+    const name = r.merchant?.name || '—';
+    merchants[name] = (merchants[name] || 0) + nz(r.amount);
+  });
+  STATE.fuel.forEach((r) => {
+    const name = r.merchant?.name || '—';
+    merchants[name] = (merchants[name] || 0) + (r.product || []).reduce((s, p) => s + nz(p?.total_value), 0);
+  });
+  STATE.maint.forEach((r) => {
+    const name = r.merchant?.name || '—';
+    merchants[name] = (merchants[name] || 0) + (r.products || []).reduce((s, p) => s + nz(p?.total_value), 0);
+  });
+  chartsHost.appendChild(barListCard('Top estabelecimentos (R$)', merchants, fmtBRL));
+
+  // Top categorias / produtos
+  const categories = {};
+  STATE.credit.forEach((r) => {
+    const k = r.transaction_category || r.merchant?.mcc || '—';
+    categories[k] = (categories[k] || 0) + nz(r.amount);
+  });
+  STATE.fuel.forEach((r) => {
+    const k = (r.product || []).map((p) => p?.name).filter(Boolean).join(', ') || '—';
+    categories[k] = (categories[k] || 0) + (r.product || []).reduce((s, p) => s + nz(p?.total_value), 0);
+  });
+  STATE.maint.forEach((r) => {
+    const k = r.maintenance_context?.maintenance_type || '—';
+    categories[k] = (categories[k] || 0) + (r.products || []).reduce((s, p) => s + nz(p?.total_value), 0);
+  });
+  chartsHost.appendChild(barListCard('Top categorias / produtos (R$)', categories, fmtBRL));
+}
+
+function emptyCard() {
+  return el('div', { class: 'chart-card', style: 'grid-column: 1 / -1;' },
+    el('div', { class: 'empty' },
+      el('div', { class: 'empty-icon' }, htmlIcon('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>')),
+      el('h3', {}, 'Carregue dados pra começar'),
+      el('p', {}, 'Use os botões no topo, arraste arquivos JSON pra cá, ou clique em '),
+      el('p', {},
+        el('button', { class: 'btn primary', onclick: loadSample, style: 'margin: 8px 4px;' }, 'Carregar demo'),
+        ' para ver o visualizador em ação com dados de exemplo.'
+      ),
+      el('p', { style: 'margin-top: 16px;' }, 'Formatos aceitos:'),
+      el('pre', {}, JSON.stringify({
+        // Resposta crua de /v1/credit-card/statement, /v1/fleet/fuel/statement
+        // /v1/fleet/maintenance/statement, /v1/partners/auth/token
+        // OU formato combinado:
+        auth: { access_token: '…', companies: [{ id: '…', name: '…', tax_id: '…' }] },
+        credit_card_statements: [{ company_id: '…', card_id: '…', response: { transactions: ['…'] } }],
+        fleet_fuel: [{ company_id: '…', response: { transactions: ['…'] } }],
+        fleet_maintenance: [{ company_id: '…', response: { transactions: ['…'] } }],
+      }, null, 2))
+    )
+  );
+}
+
+function htmlIcon(svg) {
+  const wrap = el('span');
+  wrap.innerHTML = svg;
+  return wrap.firstElementChild;
+}
+
+function barListCard(title, data, fmt) {
+  const entries = Object.entries(data).filter(([k]) => k && k !== '—').sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (entries.length === 0) {
+    return el('div', { class: 'chart-card' },
+      el('h4', {}, title),
+      el('div', { style: 'color: var(--text-muted); font-size: 12px; padding: 16px 0; text-align: center;' }, 'Sem dados')
+    );
+  }
+  const max = entries[0][1] || 1;
+  const list = el('div', { class: 'barlist' });
+  entries.forEach(([k, v]) => {
+    const pct = (v / max) * 100;
+    list.appendChild(el('div', { class: 'barlist-row' },
+      el('div', { class: 'barlist-bar' },
+        el('div', { class: 'fill', style: `width: ${pct}%;` }),
+        el('div', { class: 'label' }, k)
+      ),
+      el('div', { class: 'val' }, fmt(v))
+    ));
+  });
+  return el('div', { class: 'chart-card' }, el('h4', {}, title), list);
+}
+
+function renderEmpresas() {
+  const rows = Array.from(STATE.empresas.values());
+  buildTable('empresas', rows, COLS_EMPRESAS);
+}
+function renderCredit() { buildTable('credit', STATE.credit, COLS_CREDIT); }
+function renderFuel()   { buildTable('fuel',   STATE.fuel,   COLS_FUEL); }
+function renderMaint()  { buildTable('maint',  STATE.maint,  COLS_MAINT); }
+
+function renderRaw() {
+  const host = $('#raw-json');
+  host.innerHTML = '';
+  if (STATE.files.length === 0) {
+    host.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <h3>Nenhum arquivo carregado</h3>
+        <p>Os JSONs originais aparecem aqui pra inspeção.</p>
+      </div>`;
+    return;
+  }
+  STATE.files.forEach((f, i) => {
+    const card = el('div', { class: 'json-file' });
+    card.appendChild(el('h5', {},
+      el('span', { class: 'pill muted' }, f.type || 'desconhecido'),
+      el('strong', {}, f.name),
+      el('span', { class: 'col-mono', style: 'margin-left: auto; font-size: 11px;' }, f.addedAt.toLocaleTimeString('pt-BR')),
+      el('button', { class: 'btn sm danger ghost', onclick: () => { STATE.files.splice(i, 1); rebuildFromFiles(); } }, 'Remover')
+    ));
+    card.querySelector('h5').style.justifyContent = 'flex-start';
+    card.querySelector('h5').style.gap = '8px';
+    card.appendChild(el('pre', { html: escapeHtml(JSON.stringify(f.raw, null, 2)) }));
+    host.appendChild(card);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+function rebuildFromFiles() {
+  // Re-ingest all files into empty buckets to keep things consistent
+  const keep = STATE.files.slice();
+  STATE.auth = null;
+  STATE.empresas = new Map();
+  STATE.credit = []; STATE.fuel = []; STATE.maint = [];
+  STATE.files = [];
+  keep.forEach((f) => {
+    STATE.files.push(f);
+    ingest(f.raw, f.name);
+  });
+  renderAll();
+}
+
+// ============================================================
+// CSV EXPORT
+// ============================================================
+function exportCsv(tabKey) {
+  const map = {
+    empresas: { rows: Array.from(STATE.empresas.values()), cols: COLS_EMPRESAS, name: 'empresas' },
+    credit:   { rows: STATE.credit, cols: COLS_CREDIT, name: 'credit-card' },
+    fuel:     { rows: STATE.fuel,   cols: COLS_FUEL,   name: 'fleet-fuel' },
+    maint:    { rows: STATE.maint,  cols: COLS_MAINT,  name: 'fleet-maintenance' },
+  };
+  const cfg = map[tabKey];
+  if (!cfg || cfg.rows.length === 0) { toast('Nada para exportar', 'error'); return; }
+
+  const escape = (v) => {
+    if (v == null) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[",;\n]/.test(s) ? `"${s}"` : s;
+  };
+
+  const lines = [cfg.cols.map((c) => c.title).join(';')];
+  cfg.rows.forEach((r) => {
+    const cells = cfg.cols.map((c) => {
+      const v = c.value ? c.value(r) : getValue(r, c.key);
+      return escape(v);
+    });
+    lines.push(cells.join(';'));
+  });
+  // BOM (U+FEFF) + UTF-8 charset → Excel pt-BR abre acentos Á É Í Ó Ú Ç ã õ corretamente
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: `volus-${cfg.name}-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Exportado ${cfg.rows.length} linhas`, 'ok');
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+function activateTab(name) {
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.tab-content').forEach((c) => c.classList.toggle('active', c.dataset.tabContent === name));
+}
+
+$$('.tab').forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+$('#file-input').addEventListener('change', (e) => {
+  if (e.target.files?.length) loadFiles(e.target.files);
+  e.target.value = '';
+});
+$('#btn-upload').addEventListener('click', () => $('#file-input').click());
+
+$('#btn-paste').addEventListener('click', () => $('#paste-modal').classList.add('active'));
+$('#paste-close').addEventListener('click', () => $('#paste-modal').classList.remove('active'));
+$('#paste-cancel').addEventListener('click', () => $('#paste-modal').classList.remove('active'));
+$('#paste-confirm').addEventListener('click', () => {
+  const text = $('#paste-text').value.trim();
+  if (!text) return;
+  loadJsonText(text, `colado-${new Date().toLocaleTimeString('pt-BR')}.json`);
+  $('#paste-text').value = '';
+  $('#paste-modal').classList.remove('active');
+});
+$('#paste-modal').addEventListener('click', (e) => {
+  if (e.target === $('#paste-modal')) $('#paste-modal').classList.remove('active');
+});
+
+$('#btn-clear').addEventListener('click', () => {
+  if (STATE.files.length === 0) return;
+  if (!confirm('Limpar todos os dados carregados?')) return;
+  STATE.files = []; STATE.auth = null;
+  STATE.empresas = new Map();
+  STATE.credit = []; STATE.fuel = []; STATE.maint = [];
+  renderAll();
+  toast('Dados limpos', 'ok');
+});
+
+$('#btn-sample').addEventListener('click', loadSample);
+
+// Search inputs
+$$('[data-search-for]').forEach((input) => {
+  input.addEventListener('input', (e) => {
+    STATE.filters[input.dataset.searchFor] = e.target.value;
+    renderAll();
+  });
+});
+
+// Export buttons
+$$('[data-export]').forEach((btn) => btn.addEventListener('click', () => exportCsv(btn.dataset.export)));
+
+// Drag & drop
+const dropOverlay = $('#drop-overlay');
+let dragCounter = 0;
+window.addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer?.types?.includes('Files')) return;
+  dragCounter++;
+  dropOverlay.classList.add('active');
+});
+window.addEventListener('dragleave', () => {
+  dragCounter--;
+  if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('active'); }
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropOverlay.classList.remove('active');
+  if (e.dataTransfer?.files?.length) loadFiles(e.dataTransfer.files);
+});
+
+// Esc closes modal
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $('#paste-modal').classList.remove('active');
+});
+
+// ============================================================
+// SAMPLE DATA
+// ============================================================
+function loadSample() {
+  const sample = {
+    auth: {
+      access_token: 'eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.(demo)...',
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: '(demo)',
+      scope: [
+        { service_name: 'extrato', display_name: 'Extrato de Cartões', base_url: 'https://extrato.api.volus.com', docs_url: 'https://extrato.api.volus.com/docs' },
+        { service_name: 'cartoes', display_name: 'Gestão de Cartões',   base_url: 'https://cartoes.api.volus.com', docs_url: 'https://cartoes.api.volus.com/docs' },
+      ],
+      companies: [
+        { id: '617000000002', name: 'Prefeitura Municipal — Matriz', tax_id: '12345678000101' },
+        { id: '617000000003', name: 'Secretaria de Saúde',           tax_id: '12345678000202' },
+        { id: '617000000004', name: 'Secretaria de Educação',        tax_id: '12345678000303' },
+        { id: '600000000138', name: 'Secretaria de Transportes',     tax_id: '98765432000110' },
+        { id: '600000000140', name: 'Defesa Civil Municipal',        tax_id: '98765432000220' },
+      ],
+    },
+    credit_card_statements: [{
+      company_id: '617000000002',
+      card_id: 'CC-7843',
+      response: { transactions: [
+        { id: 'T-001', status: 'approved', signal: '-', authorization_code: '847291', transaction_category: 'COMBUSTIVEL', operation_type: 'DEBITO',
+          merchant: { name: 'AUTO POSTO CENTRAL', mcc: '5541', country: 'BR', city: 'Goiânia', state: 'GO' },
+          date: '2026-05-22T14:32:00', amount: 287.50, currency: 'BRL' },
+        { id: 'T-002', status: 'approved', signal: '-', authorization_code: '293847', transaction_category: 'ALIMENTACAO', operation_type: 'DEBITO',
+          merchant: { name: 'RESTAURANTE BOM SABOR', mcc: '5812', country: 'BR', city: 'Goiânia', state: 'GO' },
+          date: '2026-05-21T12:45:00', amount: 156.80, currency: 'BRL' },
+        { id: 'T-003', status: 'approved', signal: '+', authorization_code: '102938', transaction_category: 'ESTORNO', operation_type: 'CREDITO',
+          merchant: { name: 'POSTO BR — RUA 14', mcc: '5541', country: 'BR', city: 'Anápolis', state: 'GO' },
+          date: '2026-05-19T09:15:00', amount: 50.00, currency: 'BRL' },
+        { id: 'T-004', status: 'approved', signal: '-', authorization_code: '581929', transaction_category: 'TRANSPORTE', operation_type: 'DEBITO',
+          merchant: { name: 'UBER BV', mcc: '4121', country: 'BR', city: 'Goiânia', state: 'GO' },
+          date: '2026-05-18T19:22:00', amount: 42.30, currency: 'BRL',
+          installments: { current: 1, total: 1, transaction_date: '2026-05-18' } },
+        { id: 'T-005', status: 'approved', signal: '-', authorization_code: '772631', transaction_category: 'MATERIAL', operation_type: 'DEBITO',
+          merchant: { name: 'PAPELARIA MUNICIPAL', mcc: '5943', country: 'BR', city: 'Goiânia', state: 'GO' },
+          date: '2026-05-15T10:08:00', amount: 894.20, currency: 'BRL',
+          installments: { current: 1, total: 3, transaction_date: '2026-05-15' } },
+      ]},
+    }],
+    fleet_fuel: [{
+      company_id: '617000000002',
+      branch_code: '000002',
+      response: { transactions: [
+        { id: 1001, refuel_datetime: '2026-05-22T08:15:00', fiscal_document: 'NFE-548291',
+          card: { plate: 'GOA-1234', brand_name: 'VW', model_name: 'GOL 1.0', manufacture_year: 2023, card_masked: '****1234' },
+          merchant: { name: 'POSTO IPIRANGA',
+            address: { street: 'Av. T-7, 500', city: 'Goiânia', state: 'GO', zip_code: '74215-000' },
+            contact: {}, geo_location: { latitude: -16.6864, longitude: -49.2643 } },
+          operator: { name: 'João da Silva', license: '00123456789', id_number: '123.456.789-00' },
+          product: [{ name: 'GASOLINA COMUM', quantity: '38.50', unit_price: '5.79', total_value: '222.92' }],
+          purchase_order: { commitment_number: '2026NE00547', process_number: 'PROC-2026/01234' },
+          unit: { name: 'Sec. Transportes', code: 'TRANSP' },
+          accumulated_distance: '45230', average_consumption: '12.4 km/l' },
+        { id: 1002, refuel_datetime: '2026-05-20T16:42:00', fiscal_document: 'NFE-548902',
+          card: { plate: 'GOA-5678', brand_name: 'Toyota', model_name: 'HILUX', manufacture_year: 2024, card_masked: '****5678' },
+          merchant: { name: 'POSTO BR — RUA 14',
+            address: { street: 'Rua 14, 250', city: 'Goiânia', state: 'GO' },
+            contact: {}, geo_location: { latitude: -16.6700, longitude: -49.2549 } },
+          operator: { name: 'Maria Santos', license: '00987654321', id_number: '987.654.321-00' },
+          product: [{ name: 'DIESEL S10', quantity: '62.18', unit_price: '6.42', total_value: '399.20' }],
+          purchase_order: { commitment_number: '2026NE00548', process_number: 'PROC-2026/01234' },
+          unit: { name: 'Defesa Civil', code: 'DC' },
+          accumulated_distance: '78540', average_consumption: '9.8 km/l' },
+        { id: 1003, refuel_datetime: '2026-05-18T07:30:00',
+          card: { plate: 'GOA-9012', brand_name: 'Ford', model_name: 'RANGER', manufacture_year: 2022, card_masked: '****9012' },
+          merchant: { name: 'POSTO SHELL',
+            address: { street: 'Av. 85, 1200', city: 'Anápolis', state: 'GO' },
+            contact: {}, geo_location: { latitude: -16.3281, longitude: -48.9531 } },
+          operator: { name: 'Pedro Oliveira', id_number: '456.789.012-34' },
+          product: [{ name: 'DIESEL S10', quantity: '55.20', unit_price: '6.39', total_value: '352.73' }],
+          purchase_order: { commitment_number: '2026NE00549' },
+          unit: { name: 'Sec. Saúde', code: 'SES' },
+          accumulated_distance: '32145', average_consumption: '10.2 km/l' },
+        { id: 1004, refuel_datetime: '2026-05-16T11:55:00',
+          card: { plate: 'GOA-3456', brand_name: 'Fiat', model_name: 'STRADA', manufacture_year: 2023, card_masked: '****3456' },
+          merchant: { name: 'POSTO IPIRANGA',
+            address: { street: 'Av. T-7, 500', city: 'Goiânia', state: 'GO' },
+            contact: {}, geo_location: {} },
+          operator: { name: 'Ana Souza' },
+          product: [{ name: 'GASOLINA COMUM', quantity: '32.10', unit_price: '5.79', total_value: '185.86' }],
+          purchase_order: { commitment_number: '2026NE00551' },
+          unit: { name: 'Sec. Educação', code: 'SEDUC' },
+          accumulated_distance: '12480', average_consumption: '13.1 km/l' },
+      ]},
+    }],
+    fleet_maintenance: [{
+      company_id: '617000000002',
+      branch_code: '000002',
+      response: { transactions: [
+        { order_id: 'OS-2026-0142', transaction_datetime: '2026-05-12T14:00:00',
+          card: { plate: 'GOA-1234', brand_name: 'VW', model_name: 'GOL 1.0', card_masked: '****1234' },
+          merchant: { name: 'OFICINA CENTRAL LTDA', cnpj: '12345678000199',
+            address: { street: 'Rua A, 100', city: 'Goiânia', state: 'GO' },
+            contact: {}, geo_location: {} },
+          operator: { name: 'João da Silva', id_number: '123.456.789-00' },
+          maintenance_context: { maintenance_type: 'PREVENTIVA', usage_metric: '45230 km' },
+          invoice: { product_invoice_number: 'NF-22841', service_invoice_number: 'NFS-1284' },
+          products: [
+            { name: 'Óleo 10W40 Motor', quantity: '4', unit_price: '38.00', total_value: '152.00' },
+            { name: 'Filtro de Óleo', quantity: '1', unit_price: '45.00', total_value: '45.00' },
+            { name: 'Mão de obra — troca de óleo', quantity: '1', unit_price: '80.00', total_value: '80.00' },
+          ],
+          purchase_order: { commitment_number: '2026NE00560', process_number: 'PROC-2026/01999' },
+          unit: { name: 'Sec. Transportes', code: 'TRANSP' } },
+        { order_id: 'OS-2026-0148', transaction_datetime: '2026-05-09T10:30:00',
+          card: { plate: 'GOA-5678', brand_name: 'Toyota', model_name: 'HILUX' },
+          merchant: { name: 'TOYOTA AUTORIZADA', cnpj: '98765432000188',
+            address: { city: 'Goiânia', state: 'GO' }, contact: {}, geo_location: {} },
+          operator: { name: 'Maria Santos' },
+          maintenance_context: { maintenance_type: 'CORRETIVA', usage_metric: '78540 km' },
+          invoice: { product_invoice_number: 'NF-98472', service_invoice_number: 'NFS-2941' },
+          products: [
+            { name: 'Pastilha de Freio Diant.', quantity: '1', unit_price: '420.00', total_value: '420.00' },
+            { name: 'Disco de Freio', quantity: '2', unit_price: '280.00', total_value: '560.00' },
+            { name: 'Mão de obra', quantity: '1', unit_price: '350.00', total_value: '350.00' },
+          ],
+          purchase_order: { commitment_number: '2026NE00565' },
+          unit: { name: 'Defesa Civil', code: 'DC' } },
+        { order_id: 'OS-2026-0152', transaction_datetime: '2026-05-04T09:00:00',
+          card: { plate: 'GOA-9012', brand_name: 'Ford', model_name: 'RANGER' },
+          merchant: { name: 'AUTO CENTER ANÁPOLIS',
+            address: { city: 'Anápolis', state: 'GO' }, contact: {}, geo_location: {} },
+          operator: { name: 'Pedro Oliveira' },
+          maintenance_context: { maintenance_type: 'PREVENTIVA', usage_metric: '32145 km' },
+          invoice: { service_invoice_number: 'NFS-3812' },
+          products: [
+            { name: 'Alinhamento + Balanceamento', quantity: '1', unit_price: '180.00', total_value: '180.00' },
+          ],
+          purchase_order: { commitment_number: '2026NE00572' },
+          unit: { name: 'Sec. Saúde', code: 'SES' } },
+      ]},
+    }],
+  };
+
+  loadJsonText(JSON.stringify(sample), 'demo-volus.json');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderAll();
+</script>
+</body>
+</html>

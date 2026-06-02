@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Volus Extractor — Pipeline ponta a ponta</title>
+<style>
+:root {
+  --bg: #EEF2F8;
+  --bg-grad: radial-gradient(1200px 600px at 8% -10%, rgba(67,97,238,.10), transparent 60%),
+             radial-gradient(900px 500px at 100% 0%, rgba(149,168,255,.10), transparent 55%),
+             linear-gradient(180deg, #f6f8fc 0%, #EEF2F8 100%);
+  --surface: rgba(255,255,255,.85);
+  --surface-elev: #ffffff;
+  --surface-sub: rgba(248,250,255,.6);
+  --text: #1A1F36;
+  --text-strong: #0f172a;
+  --text-mute: #5F6B7A;
+  --text-sub: #94a3b8;
+  --accent: #4361ee;
+  --accent-strong: #3651cc;
+  --accent-bg: rgba(67,97,238,.10);
+  --accent-bg-sub: rgba(67,97,238,.06);
+  --accent-bd: rgba(67,97,238,.22);
+  --border: rgba(63,81,181,.14);
+  --border-sub: rgba(63,81,181,.08);
+  --ok: #16a34a; --ok-bg: rgba(22,163,74,.10);
+  --err: #dc2626; --err-bg: rgba(220,38,38,.10);
+  --warn: #f59e0b; --warn-bg: rgba(245,158,11,.12);
+  --r: 10px;
+  --r-lg: 14px;
+  --shadow: 0 4px 10px -2px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
+  --shadow-lg: 0 12px 28px -6px rgba(15,23,42,.14);
+  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono", monospace;
+}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:var(--font);color:var(--text);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer;border:0}
+input,select,textarea{font:inherit;color:inherit}
+code,pre,.mono{font-family:var(--mono)}
+.app{max-width:1480px;margin:0 auto;padding:18px 24px 60px}
+.topbar{display:flex;align-items:center;gap:14px;padding:14px 20px;background:var(--surface-elev);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);margin-bottom:18px;position:sticky;top:8px;z-index:30;backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text-strong)}
+.brand-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent) 0%,#6366f1 100%);border-radius:9px;display:grid;place-items:center;color:white;font-weight:800;box-shadow:0 4px 12px -2px rgba(67,97,238,.5)}
+.brand-sub{color:var(--text-mute);font-weight:500;font-size:12px;margin-left:4px}
+.spacer{flex:1}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text-mute)}
+.status-pill.ok{background:var(--ok-bg);color:var(--ok);border-color:rgba(22,163,74,.25)}
+.status-pill.err{background:var(--err-bg);color:var(--err);border-color:rgba(220,38,38,.25)}
+.status-pill.warn{background:var(--warn-bg);color:var(--warn);border-color:rgba(245,158,11,.3)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1}
+.status-pill.ok .status-dot{background:var(--ok);box-shadow:0 0 0 4px rgba(22,163,74,.18)}
+.status-pill.err .status-dot{background:var(--err)}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;transition:all .15s}
+.btn:hover{background:var(--accent-bg-sub);border-color:var(--accent-bd)}
+.btn.primary{background:var(--accent);color:white;border-color:var(--accent);box-shadow:0 2px 6px -1px rgba(67,97,238,.4)}
+.btn.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.btn.big{padding:12px 24px;font-size:15px;font-weight:600}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:12px}
+
+.grid-3{display:grid;grid-template-columns:340px 1fr;gap:18px}
+@media (max-width:980px){.grid-3{grid-template-columns:1fr}}
+
+.panel{background:var(--surface-elev);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
+.panel-h{padding:12px 16px;border-bottom:1px solid var(--border-sub);font-weight:600;color:var(--text-strong);display:flex;align-items:center;gap:10px}
+.panel-h .badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--accent-bg-sub);color:var(--accent);font-weight:600}
+.panel-body{padding:14px 16px}
+
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);font-weight:600}
+.field input,.field select,.field textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-sub);font-family:var(--mono);font-size:12px}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg-sub)}
+.field .hint{font-size:11px;color:var(--text-sub);margin-top:2px}
+.row{display:flex;gap:8px;align-items:center}
+.row > *{flex:1}
+
+.checkbox-list{padding:0;margin:0;list-style:none;max-height:260px;overflow-y:auto;border:1px solid var(--border-sub);border-radius:var(--r);background:var(--surface-sub)}
+.checkbox-list li{padding:7px 10px;border-bottom:1px solid var(--border-sub);font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.checkbox-list li:last-child{border-bottom:0}
+.checkbox-list li:hover{background:var(--accent-bg-sub)}
+.checkbox-list li input{margin:0;cursor:pointer}
+.checkbox-list .name{font-weight:600;color:var(--text-strong);flex:1}
+.checkbox-list .meta{font-family:var(--mono);color:var(--text-mute);font-size:11px}
+
+.controls-row{display:flex;gap:6px;font-size:11px;margin-bottom:6px}
+.controls-row button{padding:2px 8px;font-size:11px;background:transparent;color:var(--accent);border:0;cursor:pointer}
+.controls-row button:hover{text-decoration:underline}
+
+/* Progress */
+.progress-bar{height:8px;background:var(--surface-sub);border-radius:4px;overflow:hidden;border:1px solid var(--border-sub);margin-bottom:8px}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent) 0%,#6366f1 100%);transition:width .3s ease;border-radius:4px}
+.progress-stats{display:flex;gap:14px;font-size:11px;color:var(--text-mute)}
+.progress-stats strong{color:var(--text-strong);font-family:var(--mono)}
+
+.log{max-height:340px;overflow-y:auto;padding:8px;background:#0f172a;border-radius:var(--r);font-family:var(--mono);font-size:11px;line-height:1.5;color:#cbd5e1}
+.log-line{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center}
+.log-line .ts{color:#64748b}
+.log-line .stat{font-weight:700;width:36px;text-align:center;border-radius:3px;padding:1px 0;font-size:10px}
+.log-line .stat.s2{background:rgba(22,163,74,.18);color:#86efac}
+.log-line .stat.s4{background:rgba(220,38,38,.18);color:#fca5a5}
+.log-line .stat.s5{background:rgba(220,38,38,.18);color:#fca5a5}
+.log-line .stat.s0{background:rgba(148,163,184,.15);color:#cbd5e1}
+.log-line .url{color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log-line .info{color:#7dd3fc;text-align:right;font-size:10px}
+
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;padding:12px}
+.kpi{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r);padding:12px}
+.kpi .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute);font-weight:600;margin-bottom:4px}
+.kpi .value{font-size:18px;font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:11px;color:var(--text-mute);margin-top:2px}
+
+/* Tabs */
+.tabs{display:flex;gap:0;background:var(--surface-sub);border-bottom:1px solid var(--border-sub);overflow-x:auto}
+.tabs button{padding:10px 16px;background:transparent;border-bottom:2px solid transparent;color:var(--text-mute);font-size:13px;font-weight:500;white-space:nowrap}
+.tabs button:hover{color:var(--text)}
+.tabs button.active{color:var(--accent);border-bottom-color:var(--accent);background:white}
+.tabs button .count{font-size:11px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600}
+
+.tab-pane{display:none;max-height:60vh;overflow:auto}
+.tab-pane.active{display:block}
+.tab-pane table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.tab-pane th{position:sticky;top:0;background:white;text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-mute);font-weight:600;border-bottom:1px solid var(--border)}
+.tab-pane td{padding:7px 10px;border-bottom:1px solid var(--border-sub);white-space:nowrap}
+.tab-pane tr:nth-child(2n) td{background:rgba(248,250,255,.5)}
+.tab-pane .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tab-pane .mono{font-family:var(--mono);color:var(--text-mute);font-size:11px}
+.tab-pane .empty-pane{padding:40px;text-align:center;color:var(--text-mute)}
+
+.pill{display:inline-flex;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:600;background:var(--accent-bg-sub);color:var(--accent);border:1px solid var(--accent-bd)}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:rgba(22,163,74,.25)}
+.pill.err{background:var(--err-bg);color:var(--err);border-color:rgba(220,38,38,.25)}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border-color:rgba(245,158,11,.3)}
+.pill.mute{background:rgba(148,163,184,.12);color:var(--text-mute);border-color:rgba(148,163,184,.2)}
+
+.toast-host{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{background:white;border:1px solid var(--border);border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;box-shadow:var(--shadow);font-size:13px;max-width:380px;animation:slide .25s ease-out}
+.toast.err{border-left-color:var(--err)}
+.toast.ok{border-left-color:var(--ok)}
+@keyframes slide{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+details summary{cursor:pointer;font-size:12px;color:var(--accent);user-select:none}
+.collapsed-creds{display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--text-mute)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">⬇</div>
+      <span>Volus Extractor</span>
+      <span class="brand-sub">Pipeline ponta a ponta · Auth → GETs → Consolidação</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-text">Não autenticado</span></span>
+    <span class="mono" id="time-now" style="color:var(--text-mute);font-size:12px;"></span>
+  </header>
+
+  <div class="grid-3">
+
+    <!-- LEFT: CONFIG -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- AUTH -->
+      <div class="panel">
+        <div class="panel-h">
+          <span>1 · Autenticação</span>
+          <span class="badge" id="auth-badge">aguardando</span>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Client ID</label>
+            <input id="auth-cid" value="52cb732b-d904-0aa0-e063-326fa8c0d811" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>Client Secret</label>
+            <input id="auth-secret" value="A723A490C3882C7DFC8E698CE3345BBE" spellcheck="false" />
+            <span class="hint">Pré-preenchido com a chave do Roger (27/05).</span>
+          </div>
+          <button class="btn primary" id="btn-auth" style="width:100%">Autenticar</button>
+          <div id="auth-info" style="margin-top:10px;display:none"></div>
+        </div>
+      </div>
+
+      <!-- CONFIG -->
+      <div class="panel" id="config-panel" style="display:none">
+        <div class="panel-h">
+          <span>2 · Configurar extração</span>
+        </div>
+        <div class="panel-body">
+          <div class="row" style="margin-bottom:10px">
+            <div class="field" style="margin-bottom:0">
+              <label>Data início</label>
+              <input id="cfg-start" type="date" value="2026-01-01" />
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Data fim</label>
+              <input id="cfg-end" type="date" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Endpoints (✓ = extrair)</label>
+            <ul class="checkbox-list" id="endpoints-list" style="max-height:none"></ul>
+          </div>
+
+          <div class="field">
+            <label>Empresas (<span id="companies-count">0</span> selecionadas)</label>
+            <div class="controls-row">
+              <button id="select-all-comp">Marcar todas</button>
+              <button id="deselect-all-comp">Desmarcar</button>
+              <button id="select-617">Só 617-*</button>
+              <button id="select-600">Só 600-*</button>
+            </div>
+            <ul class="checkbox-list" id="companies-list"></ul>
+          </div>
+
+          <div class="field">
+            <label>card_ids (opcional, para /v1/credit-card/statement)</label>
+            <textarea id="card-ids" placeholder="Um por linha. Ex: NWH4279" rows="3" style="font-family:var(--mono);font-size:11px"></textarea>
+            <span class="hint">Sem card_id, o endpoint de crédito é pulado.</span>
+          </div>
+
+          <button class="btn primary big" id="btn-extract" style="width:100%;margin-top:6px">▶ Extrair</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: LOG + RESULTS -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- PROGRESS / LOG -->
+      <div class="panel">
+        <div class="panel-h">
+          <span>3 · Progresso da extração</span>
+          <span class="badge" id="progress-pct">—</span>
+        </div>
+        <div class="panel-body">
+          <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
+          <div class="progress-stats">
+            <span>Feitas: <strong id="ps-done">0</strong>/<strong id="ps-total">0</strong></span>
+            <span>200 OK: <strong id="ps-ok" style="color:var(--ok)">0</strong></span>
+            <span>403: <strong id="ps-403" style="color:var(--err)">0</strong></span>
+            <span>404: <strong id="ps-404" style="color:var(--warn)">0</strong></span>
+            <span>Outros: <strong id="ps-other">0</strong></span>
+            <span style="margin-left:auto">Transações coletadas: <strong id="ps-tx">0</strong></span>
+          </div>
+          <div class="log" id="log" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="panel">
+        <div class="panel-h">
+          <span>4 · Dados extraídos</span>
+          <span class="badge" id="results-badge">vazio</span>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn sm" id="btn-download-json">⬇ JSON consolidado</button>
+            <button class="btn sm" id="btn-open-viewer">↗ Abrir no Viewer</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="tabs" id="tabs"></div>
+        <div id="panes"></div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-host" id="toast-host"></div>
+
+<script>
+'use strict';
+
+// ============ STATE ============
+const STATE = {
+  token: null,
+  companies: [],
+  scope: [],
+  selectedCompanyIds: new Set(),
+  results: {
+    fuel: [],
+    maint: [],
+    credit: [],
+    aircrafts: [],
+  },
+  errors: [],
+  startedAt: null,
+};
+
+const ENDPOINTS = [
+  { key: 'fuel',      method: 'GET', path: '/v1/fleet/fuel/statement',        base: 'extrato', label: 'Abastecimentos (fleet/fuel)',     enabled: true },
+  { key: 'maint',     method: 'GET', path: '/v1/fleet/maintenance/statement', base: 'extrato', label: 'Manutenções (fleet/maintenance)', enabled: true },
+  { key: 'credit',    method: 'GET', path: '/v1/credit-card/statement',       base: 'extrato', label: 'Crédito (credit-card)',           enabled: false },
+  { key: 'aircrafts', method: 'GET', path: '/v1/aircrafts',                   base: 'vehicles',label: 'Aeronaves (vehicles/aircrafts)',  enabled: true },
+];
+
+// ============ HELPERS ============
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const toast = (msg, kind='') => {
+  const t = document.createElement('div');
+  t.className = `toast ${kind}`;
+  t.textContent = msg;
+  $('#toast-host').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+};
+const fmtBRL = n => (n == null || isNaN(+n)) ? '—' : (+n).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const fmtDate = s => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'});
+};
+const fmtCNPJ = v => {
+  const d = String(v||'').replace(/\D/g,'');
+  return d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5') : v;
+};
+const escapeHtml = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const nz = v => +v || 0;
+
+// Set default end_date to today
+$('#cfg-end').value = new Date().toISOString().slice(0, 10);
+
+// ============ TIME ============
+setInterval(() => {
+  $('#time-now').textContent = new Date().toLocaleTimeString('pt-BR');
+}, 1000);
+
+// ============ ENDPOINTS UI ============
+function renderEndpointsList() {
+  const ul = $('#endpoints-list');
+  ul.innerHTML = '';
+  ENDPOINTS.forEach(ep => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <input type="checkbox" id="ep-${ep.key}" ${ep.enabled?'checked':''} />
+      <span class="name">${escapeHtml(ep.label)}</span>
+      <span class="meta">${ep.method} ${ep.path}</span>
+    `;
+    li.querySelector('input').addEventListener('change', e => ep.enabled = e.target.checked);
+    li.querySelector('input').addEventListener('click', e => e.stopPropagation());
+    li.addEventListener('click', e => {
+      if (e.target.tagName !== 'INPUT') {
+        const cb = li.querySelector('input');
+        cb.checked = !cb.checked;
+        ep.enabled = cb.checked;
+      }
+    });
+    ul.appendChild(li);
+  });
+}
+renderEndpointsList();
+
+// ============ AUTH ============
+$('#btn-auth').addEventListener('click', async () => {
+  const cid = $('#auth-cid').value.trim();
+  const secret = $('#auth-secret').value.trim();
+  if (!cid || !secret) { toast('Preencha credenciais', 'err'); return; }
+  const btn = $('#btn-auth');
+  btn.disabled = true; btn.textContent = 'Autenticando…';
+  setStatus('warn', 'Autenticando…');
+  $('#auth-badge').textContent = 'tentando…';
+  try {
+    const t0 = performance.now();
+    const r = await fetch('https://auth.api.volus.com/v1/partners/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: cid, client_secret: secret }),
+    });
+    const ms = Math.round(performance.now() - t0);
+    const text = await r.text();
+    let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    if (r.ok && data.access_token) {
+      STATE.token = { ...data, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+      STATE.companies = data.companies || [];
+      STATE.scope = data.scope || [];
+      showAuthInfo(ms);
+      renderCompanies();
+      $('#config-panel').style.display = '';
+      setStatus('ok', `✓ ${STATE.companies.length} empresas · ${STATE.scope.length} serviços`);
+      $('#auth-badge').textContent = '✓ autenticado';
+      $('#auth-badge').style.background = 'var(--ok-bg)';
+      $('#auth-badge').style.color = 'var(--ok)';
+      toast(`Autenticado em ${ms}ms`, 'ok');
+    } else {
+      setStatus('err', `HTTP ${r.status}: ${data.message || 'falhou'}`);
+      $('#auth-badge').textContent = '✗ falhou';
+      $('#auth-badge').style.background = 'var(--err-bg)';
+      $('#auth-badge').style.color = 'var(--err)';
+      toast(`HTTP ${r.status}: ${data.message || 'auth falhou'}`, 'err');
+    }
+  } catch (e) {
+    setStatus('err', `Erro de rede: ${e.message}`);
+    toast(`Erro: ${e.message}`, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Re-autenticar';
+});
+
+function setStatus(kind, msg) {
+  const p = $('#status-pill');
+  p.className = `status-pill ${kind || ''}`;
+  $('#status-text').textContent = msg;
+}
+
+function showAuthInfo(ms) {
+  const t = STATE.token;
+  let alg = '?', enc = '?';
+  try {
+    const h = JSON.parse(atob(t.access_token.split('.')[0].replace(/-/g,'+').replace(/_/g,'/')));
+    alg = h.alg; enc = h.enc;
+  } catch {}
+  $('#auth-info').style.display = '';
+  $('#auth-info').innerHTML = `
+    <div style="font-size:11px;color:var(--text-mute);line-height:1.7">
+      <div>✓ <strong>200 OK</strong> em ${ms}ms — JWE <code>${alg}+${enc}</code></div>
+      <div>Empresas: <strong>${STATE.companies.length}</strong> · Scopes: <strong>${STATE.scope.map(s=>s.service_name).join(', ')}</strong></div>
+      <div>Token expira em: <span id="token-cnt">…</span></div>
+    </div>
+  `;
+  // Countdown
+  if (window._tcInt) clearInterval(window._tcInt);
+  window._tcInt = setInterval(() => {
+    const el = $('#token-cnt');
+    if (!el) return;
+    const rem = Math.max(0, Math.floor((t.expires_at - Date.now())/1000));
+    const m = Math.floor(rem/60), s = rem%60;
+    el.textContent = `${m}m ${String(s).padStart(2,'0')}s`;
+    el.style.color = rem<60 ? 'var(--err)' : rem<300 ? 'var(--warn)' : 'var(--ok)';
+  }, 1000);
+}
+
+// ============ COMPANIES UI ============
+function renderCompanies() {
+  const ul = $('#companies-list');
+  ul.innerHTML = '';
+  STATE.companies.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+  STATE.companies.forEach(c => {
+    const li = document.createElement('li');
+    const cc = (c.id||'').slice(0,6), bc = (c.id||'').slice(6);
+    li.innerHTML = `
+      <input type="checkbox" id="comp-${c.id}" checked />
+      <span class="name">${escapeHtml(c.name||'—')}</span>
+      <span class="meta">${cc}-${bc}</span>
+    `;
+    STATE.selectedCompanyIds.add(c.id);
+    li.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) STATE.selectedCompanyIds.add(c.id);
+      else STATE.selectedCompanyIds.delete(c.id);
+      updateCompaniesCount();
+    });
+    li.addEventListener('click', e => {
+      if (e.target.tagName !== 'INPUT') {
+        const cb = li.querySelector('input');
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event('change'));
+      }
+    });
+    ul.appendChild(li);
+  });
+  updateCompaniesCount();
+}
+function updateCompaniesCount(){ $('#companies-count').textContent = STATE.selectedCompanyIds.size; }
+
+$('#select-all-comp').addEventListener('click', () => {
+  $$('#companies-list input').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+});
+$('#deselect-all-comp').addEventListener('click', () => {
+  $$('#companies-list input').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+});
+$('#select-617').addEventListener('click', () => {
+  STATE.companies.forEach(c => {
+    const cb = $(`#comp-${CSS.escape(c.id)}`);
+    if (cb) { cb.checked = c.id.startsWith('000617'); cb.dispatchEvent(new Event('change')); }
+  });
+});
+$('#select-600').addEventListener('click', () => {
+  STATE.companies.forEach(c => {
+    const cb = $(`#comp-${CSS.escape(c.id)}`);
+    if (cb) { cb.checked = c.id.startsWith('000600'); cb.dispatchEvent(new Event('change')); }
+  });
+});
+
+// ============ EXTRACTION ============
+$('#btn-extract').addEventListener('click', startExtraction);
+
+async function startExtraction() {
+  if (!STATE.token) { toast('Autentique primeiro', 'err'); return; }
+  const start = $('#cfg-start').value, end = $('#cfg-end').value;
+  if (!start || !end) { toast('Defina datas', 'err'); return; }
+
+  // Reset state
+  STATE.results = { fuel: [], maint: [], credit: [], aircrafts: [] };
+  STATE.errors = [];
+  STATE.startedAt = Date.now();
+  resetProgress();
+
+  // Build queue of requests
+  const selectedEndpoints = ENDPOINTS.filter(ep => ep.enabled);
+  const companies = STATE.companies.filter(c => STATE.selectedCompanyIds.has(c.id));
+  const cardIds = $('#card-ids').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (companies.length === 0 && selectedEndpoints.some(e => e.key !== 'aircrafts')) {
+    toast('Selecione pelo menos uma empresa', 'err'); return;
+  }
+
+  const queue = buildQueue(selectedEndpoints, companies, cardIds, start, end);
+  if (queue.length === 0) { toast('Nada a extrair', 'warn'); return; }
+
+  $('#ps-total').textContent = queue.length;
+  $('#btn-extract').disabled = true;
+  $('#btn-extract').textContent = '⏳ Extraindo…';
+  setStatus('warn', `Extraindo: 0/${queue.length}`);
+
+  // Run with limited concurrency
+  await runPool(queue, 3);
+
+  // Done
+  $('#btn-extract').disabled = false;
+  $('#btn-extract').textContent = '▶ Extrair novamente';
+  const elapsed = ((Date.now() - STATE.startedAt) / 1000).toFixed(1);
+  const totalTx = STATE.results.fuel.length + STATE.results.maint.length + STATE.results.credit.length + STATE.results.aircrafts.length;
+  setStatus('ok', `✓ Concluído em ${elapsed}s — ${totalTx} registros`);
+  toast(`Extração concluída: ${totalTx} registros em ${elapsed}s`, 'ok');
+  renderResults();
+}
+
+function buildQueue(endpoints, companies, cardIds, start, end) {
+  // API atualizada em 29/05/2026: client_id (12 dígitos) ao invés de client_code+branch_code
+  const baseUrls = {
+    extrato: 'https://extrato.api.volus.com',
+    vehicles: 'https://vehicles.api.volus.com',
+  };
+  const queue = [];
+  endpoints.forEach(ep => {
+    if (ep.key === 'fuel' || ep.key === 'maint') {
+      companies.forEach(c => {
+        const params = new URLSearchParams({ start_date: start, end_date: end, client_id: c.id });
+        queue.push({ ep, url: `${baseUrls.extrato}${ep.path}?${params}`, company: c });
+      });
+    } else if (ep.key === 'credit') {
+      if (cardIds.length === 0) return;
+      cardIds.forEach(cardId => {
+        const params = new URLSearchParams({ card_id: cardId, start_date: start, end_date: end });
+        queue.push({ ep, url: `${baseUrls.extrato}${ep.path}?${params}`, cardId });
+      });
+    } else if (ep.key === 'aircrafts') {
+      queue.push({ ep, url: `${baseUrls.vehicles}${ep.path}` });
+      companies.forEach(c => {
+        queue.push({ ep, url: `${baseUrls.vehicles}${ep.path}?client_id=${c.id}`, company: c });
+      });
+    }
+  });
+  return queue;
+}
+
+async function runPool(queue, concurrency=3) {
+  let idx = 0;
+  const workers = Array.from({length: concurrency}, async () => {
+    while (idx < queue.length) {
+      const myIdx = idx++;
+      await runOne(queue[myIdx]);
+    }
+  });
+  await Promise.all(workers);
+}
+
+async function runOne(item) {
+  const { ep, url, company, cardId } = item;
+  const t0 = performance.now();
+  let status = 0, text = '', json = null;
+  try {
+    const r = await fetch(url, {
+      method: ep.method,
+      headers: { 'Authorization': `Bearer ${STATE.token.access_token}`, 'Accept': 'application/json' },
+    });
+    status = r.status;
+    text = await r.text();
+    try { json = JSON.parse(text); } catch {}
+  } catch (e) {
+    text = `Erro de rede: ${e.message}`;
+  }
+  const ms = Math.round(performance.now() - t0);
+
+  let txCount = 0;
+  if (status === 200 && json) {
+    const txs = json?.data?.transactions || json?.transactions || (Array.isArray(json?.data) ? json.data : null) || [];
+    txCount = Array.isArray(txs) ? txs.length : 0;
+    if (ep.key === 'fuel' || ep.key === 'maint') {
+      txs.forEach(t => STATE.results[ep.key].push({ ...t, _company: company }));
+    } else if (ep.key === 'credit') {
+      txs.forEach(t => STATE.results.credit.push({ ...t, _card_id: cardId }));
+    } else if (ep.key === 'aircrafts') {
+      // resposta pode ser lista direta ou data:{aircrafts:[]}
+      const arr = json?.data?.aircrafts || json?.data || json?.aircrafts || (Array.isArray(json) ? json : []);
+      if (Array.isArray(arr)) {
+        arr.forEach(a => STATE.results.aircrafts.push({ ...a, _company: company }));
+        txCount = arr.length;
+      }
+    }
+  } else if (status >= 400) {
+    STATE.errors.push({ ep: ep.key, url, status, message: json?.message || text.slice(0, 120), company, cardId });
+  }
+
+  logLine({ status, url, ms, ep: ep.key, label: company?.name || cardId || 'global', txCount, message: json?.message });
+  updateProgress(status, txCount);
+}
+
+function logLine({ status, url, ms, ep, label, txCount, message }) {
+  const log = $('#log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  const statClass = !status ? 's0' : `s${String(status)[0]}`;
+  const shortUrl = url.replace(/^https?:\/\/[^/]+/, '').slice(0, 80);
+  const ts = new Date().toLocaleTimeString('pt-BR', {hour12:false});
+  const info = status === 200 ? `+${txCount} · ${ms}ms` : `${message || '—'} · ${ms}ms`;
+  line.innerHTML = `
+    <span class="ts">${ts}</span>
+    <span class="stat ${statClass}">${status || 'ERR'}</span>
+    <span class="url" title="${escapeHtml(url)}">[${ep}] ${escapeHtml(shortUrl)}</span>
+    <span class="info">${escapeHtml(info)}</span>
+  `;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function resetProgress() {
+  $('#log').innerHTML = '';
+  $('#ps-done').textContent = '0';
+  $('#ps-ok').textContent = '0';
+  $('#ps-403').textContent = '0';
+  $('#ps-404').textContent = '0';
+  $('#ps-other').textContent = '0';
+  $('#ps-tx').textContent = '0';
+  $('#progress-fill').style.width = '0%';
+  $('#progress-pct').textContent = '0%';
+}
+
+function updateProgress(status, txCount) {
+  const done = +$('#ps-done').textContent + 1;
+  $('#ps-done').textContent = done;
+  if (status === 200) $('#ps-ok').textContent = +$('#ps-ok').textContent + 1;
+  else if (status === 403) $('#ps-403').textContent = +$('#ps-403').textContent + 1;
+  else if (status === 404) $('#ps-404').textContent = +$('#ps-404').textContent + 1;
+  else $('#ps-other').textContent = +$('#ps-other').textContent + 1;
+  $('#ps-tx').textContent = +$('#ps-tx').textContent + txCount;
+  const total = +$('#ps-total').textContent;
+  const pct = Math.round(done * 100 / total);
+  $('#progress-fill').style.width = `${pct}%`;
+  $('#progress-pct').textContent = `${pct}%`;
+}
+
+// ============ RESULTS RENDERING ============
+const TABS = [
+  { key: 'kpis',   label: 'Resumo' },
+  { key: 'fuel',   label: 'Combustível', count: () => STATE.results.fuel.length },
+  { key: 'maint',  label: 'Manutenção',  count: () => STATE.results.maint.length },
+  { key: 'credit', label: 'Crédito',     count: () => STATE.results.credit.length },
+  { key: 'aircrafts', label: 'Aeronaves', count: () => STATE.results.aircrafts.length },
+  { key: 'errors', label: 'Erros',       count: () => STATE.errors.length },
+];
+
+function renderResults() {
+  const total = STATE.results.fuel.length + STATE.results.maint.length + STATE.results.credit.length + STATE.results.aircrafts.length;
+  $('#results-badge').textContent = total ? `${total} registros` : 'vazio';
+
+  // KPIs
+  renderKpis();
+  // Tabs
+  renderTabsBar();
+  // Panes
+  renderTabPanes();
+  // Activate first tab with data, or kpis
+  activateTab('kpis');
+}
+
+function renderKpis() {
+  const totalFuelR = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+nz(p.total_value),0),0);
+  const totalCreditR = STATE.results.credit.reduce((s,t)=>s+nz(t.amount),0);
+  const elapsed = STATE.startedAt ? ((Date.now()-STATE.startedAt)/1000).toFixed(1) : '—';
+  const k = $('#kpi-grid');
+  k.innerHTML = '';
+  const items = [
+    { label: 'Abastecimentos', value: STATE.results.fuel.length, sub: fmtBRL(totalFuelR) },
+    { label: 'Manutenções',    value: STATE.results.maint.length, sub: fmtBRL(totalMaintR) },
+    { label: 'Crédito',        value: STATE.results.credit.length, sub: fmtBRL(totalCreditR) },
+    { label: 'Aeronaves',      value: STATE.results.aircrafts.length, sub: 'registros' },
+    { label: 'Empresas',       value: STATE.selectedCompanyIds.size, sub: `de ${STATE.companies.length}` },
+    { label: 'Total R$',       value: fmtBRL(totalFuelR + totalMaintR + totalCreditR), sub: 'consolidado' },
+    { label: 'Erros',          value: STATE.errors.length, sub: 'requests com falha' },
+    { label: 'Tempo',          value: `${elapsed}s`, sub: 'última extração' },
+  ];
+  items.forEach(i => {
+    const el = document.createElement('div');
+    el.className = 'kpi';
+    el.innerHTML = `<div class="label">${i.label}</div><div class="value">${typeof i.value === 'number' ? i.value.toLocaleString('pt-BR') : i.value}</div><div class="sub">${i.sub}</div>`;
+    k.appendChild(el);
+  });
+}
+
+function renderTabsBar() {
+  const tb = $('#tabs'); tb.innerHTML = '';
+  TABS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.dataset.tab = t.key;
+    btn.innerHTML = `${t.label}${t.count ? `<span class="count">${t.count()}</span>` : ''}`;
+    btn.addEventListener('click', () => activateTab(t.key));
+    tb.appendChild(btn);
+  });
+}
+
+function activateTab(key) {
+  $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === key));
+  $$('#panes > div').forEach(p => p.classList.toggle('active', p.dataset.pane === key));
+}
+
+function renderTabPanes() {
+  const ph = $('#panes'); ph.innerHTML = '';
+  // KPIs is just the grid (already shown above the tabs)
+  ph.appendChild(makePane('kpis', `<div style="padding:20px;color:var(--text-mute);font-size:13px">Veja os KPIs acima ↑ e selecione uma aba para detalhes.</div>`));
+  ph.appendChild(makePane('fuel', renderFuelTable()));
+  ph.appendChild(makePane('maint', renderMaintTable()));
+  ph.appendChild(makePane('credit', renderCreditTable()));
+  ph.appendChild(makePane('aircrafts', renderAircraftsTable()));
+  ph.appendChild(makePane('errors', renderErrorsTable()));
+}
+function makePane(key, html) {
+  const d = document.createElement('div');
+  d.className = 'tab-pane';
+  d.dataset.pane = key;
+  d.innerHTML = html;
+  return d;
+}
+
+function emptyMsg(msg) { return `<div class="empty-pane">${escapeHtml(msg)}</div>`; }
+
+function renderFuelTable() {
+  const rows = STATE.results.fuel;
+  if (rows.length === 0) return emptyMsg('Nenhum abastecimento extraído. Endpoint pode estar bloqueado (403) ou sem dados no período.');
+  const head = '<thead><tr><th>Data</th><th>Empresa</th><th>Placa</th><th>Veículo</th><th>Operador</th><th>Posto</th><th>Cidade</th><th>Produto</th><th class="num">Qtd</th><th class="num">Total</th><th>Empenho</th></tr></thead>';
+  const body = rows.map(t => {
+    const total = (t.product||[]).reduce((s,p)=>s+nz(p.total_value),0);
+    const qty = (t.product||[]).reduce((s,p)=>s+nz(p.quantity),0);
+    return `<tr>
+      <td class="mono">${fmtDate(t.refuel_datetime)}</td>
+      <td>${escapeHtml(t._company?.name||'')}</td>
+      <td class="mono">${escapeHtml(t.card?.plate||t.card?.prefix||'—')}</td>
+      <td>${escapeHtml([t.card?.brand_name,t.card?.model_name].filter(Boolean).join(' '))}</td>
+      <td>${escapeHtml(t.operator?.name||'')}</td>
+      <td>${escapeHtml(t.merchant?.name||'')}</td>
+      <td>${escapeHtml([t.merchant?.address?.city,t.merchant?.address?.state].filter(Boolean).join('/'))}</td>
+      <td>${escapeHtml((t.product||[]).map(p=>p.name).join(', '))}</td>
+      <td class="num">${qty ? qty.toLocaleString('pt-BR',{maximumFractionDigits:2}) : '—'}</td>
+      <td class="num">${fmtBRL(total)}</td>
+      <td class="mono">${escapeHtml(t.purchase_order?.commitment_number||'')}</td>
+    </tr>`;
+  }).join('');
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
+function renderMaintTable() {
+  const rows = STATE.results.maint;
+  if (rows.length === 0) return emptyMsg('Nenhuma manutenção extraída.');
+  const head = '<thead><tr><th>Data</th><th>Ordem</th><th>Empresa</th><th>Placa</th><th>Oficina</th><th>Tipo</th><th>NF Peças</th><th>NF Serv.</th><th class="num">Total</th><th>Empenho</th></tr></thead>';
+  const body = rows.map(t => {
+    const total = (t.products||[]).reduce((s,p)=>s+nz(p.total_value),0);
+    return `<tr>
+      <td class="mono">${fmtDate(t.transaction_datetime)}</td>
+      <td class="mono">${escapeHtml(t.order_id||'')}</td>
+      <td>${escapeHtml(t._company?.name||'')}</td>
+      <td class="mono">${escapeHtml(t.card?.plate||'—')}</td>
+      <td>${escapeHtml(t.merchant?.name||'')}</td>
+      <td>${escapeHtml(t.maintenance_context?.maintenance_type||'')}</td>
+      <td class="mono">${escapeHtml(t.invoice?.product_invoice_number||'')}</td>
+      <td class="mono">${escapeHtml(t.invoice?.service_invoice_number||'')}</td>
+      <td class="num">${fmtBRL(total)}</td>
+      <td class="mono">${escapeHtml(t.purchase_order?.commitment_number||'')}</td>
+    </tr>`;
+  }).join('');
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
+function renderCreditTable() {
+  const rows = STATE.results.credit;
+  if (rows.length === 0) return emptyMsg('Nenhuma transação de crédito. Forneça card_ids válidos na configuração.');
+  const head = '<thead><tr><th>Data</th><th>Card</th><th>Status</th><th>Tipo</th><th>Sinal</th><th>Estabelecimento</th><th>Cidade</th><th class="num">Valor</th><th>Parcela</th><th>Auth</th></tr></thead>';
+  const body = rows.map(t => `<tr>
+    <td class="mono">${fmtDate(t.date)}</td>
+    <td class="mono">${escapeHtml(t._card_id||'')}</td>
+    <td><span class="pill ${t.status==='APROVADA'?'ok':t.status==='CANCELADA'?'err':'mute'}">${escapeHtml(t.status||'')}</span></td>
+    <td>${escapeHtml(t.transaction_category||'')}</td>
+    <td>${escapeHtml(t.signal||'')}</td>
+    <td>${escapeHtml(t.merchant?.name||'')}</td>
+    <td>${escapeHtml([t.merchant?.city,t.merchant?.state].filter(Boolean).join('/'))}</td>
+    <td class="num">${fmtBRL(t.amount)}</td>
+    <td class="mono">${t.installments ? `${t.installments.current}/${t.installments.total}` : ''}</td>
+    <td class="mono">${escapeHtml(t.authorization_code||'')}</td>
+  </tr>`).join('');
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
+function renderAircraftsTable() {
+  const rows = STATE.results.aircrafts;
+  if (rows.length === 0) return emptyMsg('Nenhuma aeronave extraída. Endpoint pode estar bloqueado (403) ou frota sem aeronaves.');
+  const head = '<thead><tr><th>Tail ID</th><th>Empresa</th><th>Detalhes</th></tr></thead>';
+  const body = rows.map(a => `<tr>
+    <td class="mono">${escapeHtml(a.tail_id||a.id||'—')}</td>
+    <td>${escapeHtml(a._company?.name||'')}</td>
+    <td class="mono" style="font-size:10px">${escapeHtml(JSON.stringify(a).slice(0,200))}</td>
+  </tr>`).join('');
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
+function renderErrorsTable() {
+  const errs = STATE.errors;
+  if (errs.length === 0) return emptyMsg('Sem erros — todas as chamadas retornaram 200.');
+  const head = '<thead><tr><th>Status</th><th>Endpoint</th><th>Empresa/Card</th><th>Mensagem</th></tr></thead>';
+  const body = errs.map(e => `<tr>
+    <td><span class="pill ${e.status===403?'err':e.status===404?'warn':'mute'}">${e.status}</span></td>
+    <td class="mono">[${e.ep}] ${escapeHtml(e.url.split('?')[0].replace(/^https?:\/\/[^/]+/,''))}</td>
+    <td>${escapeHtml(e.company?.name || e.cardId || '')}</td>
+    <td>${escapeHtml(e.message||'')}</td>
+  </tr>`).join('');
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
+// ============ EXPORT ============
+$('#btn-download-json').addEventListener('click', () => {
+  const data = {
+    extracted_at: new Date().toISOString(),
+    auth: { companies: STATE.companies, scope: STATE.scope },
+    period: { start: $('#cfg-start').value, end: $('#cfg-end').value },
+    fleet_fuel: STATE.results.fuel.map(t => ({
+      company_id: t._company?.id,
+      response: { transactions: [t] }
+    })),
+    fleet_maintenance: STATE.results.maint.map(t => ({
+      company_id: t._company?.id,
+      response: { transactions: [t] }
+    })),
+    credit_card_statements: STATE.results.credit.map(t => ({
+      card_id: t._card_id,
+      response: { transactions: [t] }
+    })),
+    aircrafts: STATE.results.aircrafts,
+    errors: STATE.errors,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `volus-extracao-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('JSON baixado', 'ok');
+});
+
+$('#btn-open-viewer').addEventListener('click', () => {
+  // Serialize to sessionStorage e abre o viewer
+  const data = {
+    auth: { companies: STATE.companies, scope: STATE.scope },
+    credit_card_statements: STATE.results.credit.map(t => ({ card_id: t._card_id, response: { transactions: [t] } })),
+    fleet_fuel: STATE.results.fuel.map(t => ({ company_id: t._company?.id, response: { transactions: [t] } })),
+    fleet_maintenance: STATE.results.maint.map(t => ({ company_id: t._company?.id, response: { transactions: [t] } })),
+  };
+  sessionStorage.setItem('volus-viewer-preload', JSON.stringify(data));
+  window.open('volus-viewer.html', '_blank');
+  toast('Abrindo viewer...', 'ok');
+});
+
+// ============ INIT ============
+toast('Pronto. Clique Autenticar.', '');
+</script>
+</body>
+</html>
