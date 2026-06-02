@@ -94,6 +94,8 @@ code,.mono{font-family:var(--mono)}
 .kpi .sub{font-size:11px;color:var(--text-mute);margin-top:2px}
 .kpi.ok .value{color:var(--ok)}
 .kpi.err .value{color:var(--err)}
+.kpi.warn .value{color:var(--warn)}
+.kpi.warn{background:var(--warn-bg);border-color:rgba(245,158,11,.3)}
 
 /* TABS */
 .tabs{display:flex;gap:0;background:var(--surface-sub);border-bottom:1px solid var(--border-sub);overflow-x:auto;padding:0 4px}
@@ -238,7 +240,7 @@ table.data .empty-state{padding:40px;text-align:center;color:var(--text-mute)}
     <div class="spacer"></div>
     <div class="field-inline">
       <label>De</label>
-      <input id="cfg-start" type="date" value="2026-01-01" />
+      <input id="cfg-start" type="date" value="2025-01-01" />
       <label>até</label>
       <input id="cfg-end" type="date" />
     </div>
@@ -340,16 +342,16 @@ const STATE = {
   token: null,
   companies: [],
   scope: [],
-  results: { fuel: [], maint: [], credit: [], aircrafts: [] },
+  results: { fuel: [], maint: [] },
   errors: [],
   failedItems: [],
   startedAt: null, finishedAt: null,
   activeTab: 'fuel',
+  // Qualidade de dados: contadores incrementados por ingestSuccess quando campos críticos faltam
+  dataQuality: { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0 },
   tabState: {
     fuel:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
     maint:     { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    credit:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    aircrafts: { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
     empresas:  { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
     errors:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
   },
@@ -552,25 +554,27 @@ async function runWithRetry(item, maxRetries=3) {
 function label(item) { return item.company?.name || 'global'; }
 function countTx(ep, json) {
   const data = json.data || json;
-  if (ep === 'aircrafts') {
-    const arr = data.aircrafts || data;
-    return Array.isArray(arr) ? arr.length : 0;
-  }
   const txs = data.transactions;
   return Array.isArray(txs) ? txs.length : 0;
 }
 function ingestSuccess(item, json) {
   const data = json.data || json;
-  if (item.ep === 'aircrafts') {
-    const arr = data.aircrafts || data;
-    if (Array.isArray(arr)) arr.forEach(a => STATE.results.aircrafts.push({...a, _company:item.company}));
-  } else {
-    const txs = data.transactions || [];
-    if (Array.isArray(txs)) {
-      const target = STATE.results[item.ep];
-      txs.forEach(t => target.push({...t, _company:item.company}));
-      bumpCounter('tx', txs.length);
-    }
+  const txs = data.transactions || [];
+  if (Array.isArray(txs)) {
+    const target = STATE.results[item.ep];
+    txs.forEach(t => {
+      target.push({...t, _company:item.company});
+      // Q3: Validação de campos críticos — incrementa contadores se algum estiver ausente
+      const plate = t.card?.plate || t.card?.prefix;
+      const merchant = t.merchant?.name;
+      const dateField = item.ep === 'fuel' ? t.refuel_datetime : t.transaction_datetime;
+      const productOk = item.ep === 'fuel' ? (Array.isArray(t.product) && t.product.length > 0) : (Array.isArray(t.products) && t.products.length > 0);
+      if (!plate) STATE.dataQuality.missingPlate++;
+      if (!merchant) STATE.dataQuality.missingMerchant++;
+      if (!dateField) STATE.dataQuality.missingDate++;
+      if (!productOk) STATE.dataQuality.missingProduct++;
+    });
+    bumpCounter('tx', txs.length);
   }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -629,9 +633,10 @@ async function runExtract(retryOnly=false) {
       const ok = await authenticate();
       if (!ok) { $('#btn-extract').disabled = false; $('#btn-extract').textContent='🔄 Extrair tudo'; return; }
     }
-    STATE.results = { fuel:[], maint:[], credit:[], aircrafts:[] };
+    STATE.results = { fuel:[], maint:[] };
     STATE.errors = [];
     STATE.failedItems = [];
+    STATE.dataQuality = { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0 };
     STATE.startedAt = Date.now();
     $('#log').innerHTML = '';
     ['done','ok','403','404','500','retries','tx'].forEach(k => $(`#ps-${k}`).textContent='0');
@@ -654,7 +659,7 @@ async function runExtract(retryOnly=false) {
 
   STATE.finishedAt = Date.now();
   const elapsed = ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1);
-  const totalTx = STATE.results.fuel.length + STATE.results.maint.length + STATE.results.credit.length + STATE.results.aircrafts.length;
+  const totalTx = STATE.results.fuel.length + STATE.results.maint.length;
   const totalErr = STATE.errors.length;
 
   setStatus(totalErr===0 ? 'ok' : 'warn', `✓ ${totalTx} registros em ${elapsed}s · ${totalErr} erro(s)`);
@@ -674,7 +679,7 @@ $('#btn-extract').addEventListener('click', () => runExtract(false));
 $('#btn-retry-errors').addEventListener('click', () => runExtract(true));
 // Re-render quando trocar a escala monetária
 $('#cfg-scale').addEventListener('change', () => {
-  if (STATE.results.fuel.length > 0 || STATE.results.maint.length > 0 || STATE.results.credit.length > 0) {
+  if (STATE.results.fuel.length > 0 || STATE.results.maint.length > 0) {
     renderAll();
     toast(`Escala alterada para ${$('#cfg-scale').selectedOptions[0].textContent}`, 'ok');
   }
@@ -698,7 +703,8 @@ const COLS = {
     {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
     {k:'product', t:'Produto', val:r=>(r.product||[]).map(p=>p?.name).filter(Boolean).join(', ')},
     {k:'qty', t:'Qtd', val:r=>(r.product||[]).reduce((s,p)=>s+nz(p.quantity),0), render:r=>{const q=(r.product||[]).reduce((s,p)=>s+nz(p.quantity),0); return q?fmtNum(q,3):'—';}, cls:'num'},
-    {k:'unit_price', t:'R$/un', val:r=>(r.product||[])[0]?scaled((r.product||[])[0].unit_price):0, render:r=>{const p=(r.product||[])[0];return p?fmtBRL(scaled(p.unit_price)):'—';}, cls:'num'},
+    // Q2: R$/un = média ponderada quando há multi-produto (totalValor / totalQty). Tooltip mostra detalhe se houver mais de 1.
+    {k:'unit_price', t:'R$/un', val:r=>{const ps=(r.product||[]);const tq=ps.reduce((s,p)=>s+nz(p.quantity),0);const tv=ps.reduce((s,p)=>s+scaled(p.total_value),0);return tq>0?tv/tq:0;}, render:r=>{const ps=(r.product||[]);if(!ps.length)return '—';const tq=ps.reduce((s,p)=>s+nz(p.quantity),0);const tv=ps.reduce((s,p)=>s+scaled(p.total_value),0);if(tq<=0)return '—';const avg=tv/tq;const tip=ps.length>1?`${ps.length} produtos: ${ps.map(p=>`${p.name||'?'}=${fmtBRL(scaled(p.unit_price))}`).join(' · ')}`:'';return tip?`<span title="${escapeHtml(tip)}">${fmtBRL(avg)}${ps.length>1?` <small style="opacity:.5">×${ps.length}</small>`:''}</span>`:fmtBRL(avg);}, cls:'num'},
     {k:'total', t:'Total', val:r=>(r.product||[]).reduce((s,p)=>s+scaled(p.total_value),0), render:r=>fmtBRL((r.product||[]).reduce((s,p)=>s+scaled(p.total_value),0)), cls:'num', total:true},
     {k:'distance', t:'Hodômetro', val:r=>r.accumulated_distance, render:r=>r.accumulated_distance?`${r.accumulated_distance} km`:'—', cls:'mono'},
     {k:'consumption', t:'Média', val:r=>r.average_consumption, render:r=>r.average_consumption||'—', cls:'mono'},
@@ -723,23 +729,6 @@ const COLS = {
     {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
     {k:'unit', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
   ],
-  credit: [
-    {k:'_date', t:'Data', val:r=>r.date?new Date(r.date).toLocaleDateString('pt-BR'):'', sortVal:r=>r.date?new Date(r.date).getTime():0, render:r=>fmtDate(r.date), cls:'mono'},
-    {k:'status', t:'Status', val:r=>r.status, render:r=>r.status?`<span class="pill ${r.status==='APROVADA'?'ok':r.status==='CANCELADA'?'err':'mute'}">${escapeHtml(r.status)}</span>`:'—'},
-    {k:'cat', t:'Categoria', val:r=>r.transaction_category, cls:'mono'},
-    {k:'signal', t:'Sinal', val:r=>r.signal, render:r=>r.signal==='CREDIT'?'<span class="pill ok">+</span>':'<span class="pill err">−</span>'},
-    {k:'merchant', t:'Estabelecimento', val:r=>r.merchant?.name, cls:'strong'},
-    {k:'mcc', t:'MCC', val:r=>r.merchant?.mcc, cls:'mono'},
-    {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.city,r.merchant?.state].filter(Boolean).join('/')},
-    {k:'amount', t:'Valor', val:r=>scaled(r.amount), render:r=>fmtBRL(scaled(r.amount)), cls:'num', total:true},
-    {k:'inst', t:'Parcela', val:r=>r.installments?`${r.installments.current}/${r.installments.total}`:'', cls:'mono'},
-    {k:'auth', t:'Auth', val:r=>r.authorization_code, cls:'mono'},
-  ],
-  aircrafts: [
-    {k:'tail', t:'Tail ID', val:r=>r.tail_id||r.id, cls:'mono strong'},
-    {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'(global)'},
-    {k:'raw', t:'Dados (JSON)', val:r=>JSON.stringify(r).slice(0,300), cls:'mono'},
-  ],
   empresas: [
     {k:'id', t:'ID', val:r=>r.id, cls:'mono'},
     {k:'cc', t:'client_code', val:r=>(r.id||'').slice(0,6), cls:'mono'},
@@ -762,8 +751,6 @@ const COLS = {
 const TABS = [
   {k:'fuel', label:'Combustível'},
   {k:'maint', label:'Manutenção'},
-  {k:'credit', label:'Crédito'},
-  {k:'aircrafts', label:'Aeronaves'},
   {k:'empresas', label:'Empresas'},
   {k:'errors', label:'Erros', isErr:true},
 ];
@@ -772,8 +759,6 @@ function dataFor(tabKey) {
   switch(tabKey) {
     case 'fuel': return STATE.results.fuel;
     case 'maint': return STATE.results.maint;
-    case 'credit': return STATE.results.credit;
-    case 'aircrafts': return STATE.results.aircrafts;
     case 'empresas': return STATE.companies;
     case 'errors': return STATE.errors;
   }
@@ -793,17 +778,20 @@ function renderAll() {
 function renderKpis() {
   const totalFuelR = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
   const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
-  const totalCreditR = STATE.results.credit.reduce((s,t)=>s+scaled(t.amount),0);
   const elapsed = STATE.finishedAt ? ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1) : '—';
+  // Q3: total de registros com campos críticos faltando (data, placa, mercante, produto)
+  const dq = STATE.dataQuality;
+  const dqTotal = dq.missingPlate + dq.missingMerchant + dq.missingProduct + dq.missingDate;
+  const dqSub = dqTotal === 0 ? 'todos campos OK' : `placa:${dq.missingPlate} · merc:${dq.missingMerchant} · prod:${dq.missingProduct} · data:${dq.missingDate}`;
   const items = [
     {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:fmtBRL(totalFuelR), cls: STATE.results.fuel.length>0?'ok':''},
     {label:'Manutenções', value:STATE.results.maint.length.toLocaleString('pt-BR'), sub:fmtBRL(totalMaintR), cls: STATE.results.maint.length>0?'ok':''},
-    {label:'Crédito', value:STATE.results.credit.length.toLocaleString('pt-BR'), sub:fmtBRL(totalCreditR)},
-    {label:'Aeronaves', value:STATE.results.aircrafts.length.toLocaleString('pt-BR'), sub:'registros'},
     {label:'Empresas', value:STATE.companies.length, sub:'autorizadas'},
-    {label:'Total R$', value:fmtBRL(totalFuelR+totalMaintR+totalCreditR), sub:'consolidado'},
+    {label:'Total R$', value:fmtBRL(totalFuelR+totalMaintR), sub:'consolidado'},
     {label:'Erros', value:STATE.errors.length.toLocaleString('pt-BR'), sub:STATE.errors.length===0?'sem falhas':'requests falhadas', cls: STATE.errors.length>0?'err':'ok'},
     {label:'Tempo', value:`${elapsed}s`, sub:'última extração'},
+    // Tile só aparece se houver issue de qualidade (dqTotal > 0)
+    ...(dqTotal > 0 ? [{label:'Qualidade ⚠️', value:dqTotal.toLocaleString('pt-BR'), sub:dqSub, cls:'warn'}] : []),
   ];
   const k = $('#kpi-grid'); k.innerHTML='';
   items.forEach(i => {
