@@ -756,28 +756,34 @@ const copyTA = id => { const ta = $('#'+id); ta.select(); document.execCommand('
 $('#copy-fuel')?.addEventListener('click', () => copyTA('inspect-fuel'));
 $('#copy-maint')?.addEventListener('click', () => copyTA('inspect-maint'));
 
-// ===== AUTODETECT helpers para maint (total/commitment/unit) =====
-// Vólus pode ter campos em paths diferentes pra maintenance. Estes helpers
-// tentam múltiplos paths e retornam o primeiro não-nulo.
-function maintTotal(r) {
-  // Path tradicional (legacy)
-  const fromProductsTV = (r.products||[]).reduce((s,p)=>s+scaled(p?.total_value||0),0);
-  if (fromProductsTV > 0) return fromProductsTV;
-  // Alternativos no nível do produto
-  for (const field of ['cost','value','price','amount','gross_value','net_value','total','total_price']) {
-    const sum = (r.products||[]).reduce((s,p)=>s+scaled(p?.[field]||0),0);
-    if (sum > 0) return sum;
+// ===== HELPERS de manutenção (descoberto via Inspetor de JSON 2026-06-02) =====
+// CRÍTICO: API de manutenção tem schema DIFERENTE da fuel:
+//  - products[] (plural · fuel usa product[] singular)
+//  - total_price em REAIS (fuel usa total_value em CENTAVOS!)
+//  - unit.description (fuel usa unit.name)
+// Por isso maint NÃO passa por scaled() — valores já vêm em reais.
+function maintProductTotal(p) {
+  // Canonical: total_price em reais (não dividir!)
+  if (p?.total_price != null && p.total_price !== '') return nz(p.total_price);
+  // Fallback legacy: total_value em centavos (dividir por 100 via scaled)
+  if (p?.total_value != null && p.total_value !== '') return scaled(p.total_value);
+  // Outros fallbacks — assume reais (raw) já que total_value é o único path centavos conhecido
+  for (const f of ['cost','value','price','amount','gross_value','net_value','total']) {
+    if (p?.[f] != null && p[f] !== '') return nz(p[f]);
   }
-  // No nível da transação
+  return 0;
+}
+function maintTotal(r) {
+  const sum = (r.products||[]).reduce((s,p)=>s+maintProductTotal(p), 0);
+  if (sum > 0) return sum;
+  // Fallback: total no nível da transação (assume reais salvo total_value)
+  if (r.total_price != null) return nz(r.total_price);
   if (r.total_value != null) return scaled(r.total_value);
-  if (r.amount != null) return scaled(r.amount);
-  if (r.total != null) return scaled(r.total);
-  if (r.gross_total != null) return scaled(r.gross_total);
-  if (r.net_total != null) return scaled(r.net_total);
-  // Em invoice
+  if (r.amount != null) return nz(r.amount);
+  if (r.total != null) return nz(r.total);
+  if (r.invoice?.total_price != null) return nz(r.invoice.total_price);
   if (r.invoice?.total_value != null) return scaled(r.invoice.total_value);
-  if (r.invoice?.total != null) return scaled(r.invoice.total);
-  const invSum = scaled(r.invoice?.product_invoice_value||0) + scaled(r.invoice?.service_invoice_value||0);
+  const invSum = nz(r.invoice?.product_invoice_value) + nz(r.invoice?.service_invoice_value);
   if (invSum > 0) return invSum;
   return 0;
 }
@@ -790,10 +796,12 @@ function maintCommitment(r) {
       || '';
 }
 function maintUnit(r) {
-  return r.unit?.name || r.unit?.code
+  // Vólus 2026-06-02 confirmado: maint usa unit.description (fuel usa unit.name)
+  return r.unit?.description
+      || r.unit?.name || r.unit?.code
       || r.unit_name
-      || r.organizational_unit?.name || r.organizational_unit?.code
-      || r.cost_center?.name || r.cost_center?.code
+      || r.organizational_unit?.description || r.organizational_unit?.name || r.organizational_unit?.code
+      || r.cost_center?.description || r.cost_center?.name || r.cost_center?.code
       || '';
 }
 
