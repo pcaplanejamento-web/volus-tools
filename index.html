@@ -96,6 +96,16 @@ code,.mono{font-family:var(--mono)}
 .kpi.err .value{color:var(--err)}
 .kpi.warn .value{color:var(--warn)}
 .kpi.warn{background:var(--warn-bg);border-color:rgba(245,158,11,.3)}
+/* Inspector modal */
+.inspect-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.inspect-modal[hidden]{display:none}
+.inspect-card{background:var(--surface);border-radius:var(--r-xl);max-width:1100px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.inspect-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.inspect-body{overflow:auto;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.inspect-section{display:flex;flex-direction:column;min-height:0}
+.inspect-section-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-weight:600;color:var(--text-strong)}
+.inspect-section textarea{flex:1;min-height:500px;font:11px/1.4 var(--mono);background:var(--surface-sub);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);resize:vertical;white-space:pre;word-break:normal}
+@media (max-width:900px){.inspect-body{grid-template-columns:1fr}}
 
 /* TABS */
 .tabs{display:flex;gap:0;background:var(--surface-sub);border-bottom:1px solid var(--border-sub);overflow-x:auto;padding:0 4px}
@@ -254,7 +264,34 @@ table.data .empty-state{padding:40px;text-align:center;color:var(--text-mute)}
     <span class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-text">Iniciando…</span></span>
     <button class="btn primary" id="btn-extract">🔄 Extrair tudo</button>
     <button class="btn danger sm" id="btn-retry-errors" title="Re-tentar só os endpoints que falharam" hidden>↻ Re-tentar falhas</button>
+    <button class="btn sm" id="btn-inspect" title="Ver JSON cru da 1ª transação de cada endpoint" hidden>🔬 Inspecionar JSON</button>
   </header>
+
+  <!-- INSPECTOR MODAL -->
+  <div id="inspect-modal" class="inspect-modal" hidden>
+    <div class="inspect-card">
+      <div class="inspect-h">
+        <strong>🔬 Inspetor de shape das transações</strong>
+        <button class="btn sm" id="inspect-close">✕ Fechar</button>
+      </div>
+      <div class="inspect-body">
+        <div class="inspect-section">
+          <div class="inspect-section-h">
+            <span>Combustível · 1ª transação</span>
+            <button class="btn sm" id="copy-fuel">📋 Copiar</button>
+          </div>
+          <textarea id="inspect-fuel" readonly></textarea>
+        </div>
+        <div class="inspect-section">
+          <div class="inspect-section-h">
+            <span>Manutenção · 1ª transação</span>
+            <button class="btn sm" id="copy-maint">📋 Copiar</button>
+          </div>
+          <textarea id="inspect-maint" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- PROGRESS -->
   <div class="panel" id="progress-panel" hidden>
@@ -557,13 +594,17 @@ function countTx(ep, json) {
   const txs = data.transactions;
   return Array.isArray(txs) ? txs.length : 0;
 }
+// Samples da 1ª transação de cada endpoint pra inspecionar/debugar shape do response
+const SAMPLES = {};
+
 function ingestSuccess(item, json) {
   const data = json.data || json;
   const txs = data.transactions || [];
   if (Array.isArray(txs)) {
     const target = STATE.results[item.ep];
-    // DIAGNÓSTICO: loga a 1ª transação de cada endpoint pra inspecionar shape real
-    if (target.length === 0 && txs.length > 0) {
+    // DIAGNÓSTICO: armazena 1ª tx + loga no console + revela botão Inspecionar
+    if (!SAMPLES[item.ep] && txs.length > 0) {
+      SAMPLES[item.ep] = txs[0];
       console.group(`🔬 SHAPE da 1ª transação · ${item.ep} · ${item.company?.name||''}`);
       console.log('Keys da resposta:', Object.keys(json), '| keys data:', Object.keys(data));
       console.log('Tx[0] keys:', Object.keys(txs[0]));
@@ -572,6 +613,8 @@ function ingestSuccess(item, json) {
       console.log(`product[]/products[] (${pArr.length}):`, pArr[0] || '(vazio)');
       if (pArr[0]) console.log('Keys product[0]:', Object.keys(pArr[0]), '| total_value:', pArr[0].total_value, '| unit_price:', pArr[0].unit_price);
       console.groupEnd();
+      const btn = document.getElementById('btn-inspect');
+      if (btn) btn.removeAttribute('hidden');
     }
     txs.forEach(t => {
       target.push({...t, _company:item.company});
@@ -701,6 +744,59 @@ $('#btn-toggle-log').addEventListener('click', () => {
   else log.setAttribute('hidden', '');
 });
 
+// Inspector modal
+$('#btn-inspect')?.addEventListener('click', () => {
+  $('#inspect-fuel').value = SAMPLES.fuel ? JSON.stringify(SAMPLES.fuel, null, 2) : '(sem amostra · extraia antes)';
+  $('#inspect-maint').value = SAMPLES.maint ? JSON.stringify(SAMPLES.maint, null, 2) : '(sem amostra · extraia antes)';
+  $('#inspect-modal').removeAttribute('hidden');
+});
+$('#inspect-close')?.addEventListener('click', () => $('#inspect-modal').setAttribute('hidden', ''));
+$('#inspect-modal')?.addEventListener('click', e => { if (e.target.id === 'inspect-modal') $('#inspect-modal').setAttribute('hidden', ''); });
+const copyTA = id => { const ta = $('#'+id); ta.select(); document.execCommand('copy'); toast(`📋 ${id} copiado`, 'ok'); };
+$('#copy-fuel')?.addEventListener('click', () => copyTA('inspect-fuel'));
+$('#copy-maint')?.addEventListener('click', () => copyTA('inspect-maint'));
+
+// ===== AUTODETECT helpers para maint (total/commitment/unit) =====
+// Vólus pode ter campos em paths diferentes pra maintenance. Estes helpers
+// tentam múltiplos paths e retornam o primeiro não-nulo.
+function maintTotal(r) {
+  // Path tradicional (legacy)
+  const fromProductsTV = (r.products||[]).reduce((s,p)=>s+scaled(p?.total_value||0),0);
+  if (fromProductsTV > 0) return fromProductsTV;
+  // Alternativos no nível do produto
+  for (const field of ['cost','value','price','amount','gross_value','net_value','total','total_price']) {
+    const sum = (r.products||[]).reduce((s,p)=>s+scaled(p?.[field]||0),0);
+    if (sum > 0) return sum;
+  }
+  // No nível da transação
+  if (r.total_value != null) return scaled(r.total_value);
+  if (r.amount != null) return scaled(r.amount);
+  if (r.total != null) return scaled(r.total);
+  if (r.gross_total != null) return scaled(r.gross_total);
+  if (r.net_total != null) return scaled(r.net_total);
+  // Em invoice
+  if (r.invoice?.total_value != null) return scaled(r.invoice.total_value);
+  if (r.invoice?.total != null) return scaled(r.invoice.total);
+  const invSum = scaled(r.invoice?.product_invoice_value||0) + scaled(r.invoice?.service_invoice_value||0);
+  if (invSum > 0) return invSum;
+  return 0;
+}
+function maintCommitment(r) {
+  return r.purchase_order?.commitment_number
+      || r.commitment_number
+      || r.invoice?.commitment_number
+      || r.invoice?.purchase_order?.commitment_number
+      || r.products?.[0]?.purchase_order?.commitment_number
+      || '';
+}
+function maintUnit(r) {
+  return r.unit?.name || r.unit?.code
+      || r.unit_name
+      || r.organizational_unit?.name || r.organizational_unit?.code
+      || r.cost_center?.name || r.cost_center?.code
+      || '';
+}
+
 // ============== RENDER ==============
 const COLS = {
   fuel: [
@@ -735,10 +831,12 @@ const COLS = {
     {k:'usage', t:'Hodômetro', val:r=>r.maintenance_context?.usage_metric, cls:'mono'},
     {k:'nfp', t:'NF Peças', val:r=>r.invoice?.product_invoice_number, cls:'mono'},
     {k:'nfs', t:'NF Serv', val:r=>r.invoice?.service_invoice_number, cls:'mono'},
-    {k:'total', t:'Total', val:r=>(r.products||[]).reduce((s,p)=>s+scaled(p.total_value),0), render:r=>fmtBRL((r.products||[]).reduce((s,p)=>s+scaled(p.total_value),0)), cls:'num', total:true},
+    // Q2-fix: autodetect path do total (Vólus pode mandar em products[].total_value, cost, ou invoice.*)
+    {k:'total', t:'Total', val:r=>maintTotal(r), render:r=>fmtBRL(maintTotal(r)), cls:'num', total:true},
     {k:'items', t:'Itens', val:r=>(r.products||[]).length, cls:'num'},
-    {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
-    {k:'unit', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
+    // Autodetect empenho/unidade — testa múltiplos paths
+    {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
+    {k:'unit', t:'Unidade', val:r=>maintUnit(r)},
   ],
   empresas: [
     {k:'id', t:'ID', val:r=>r.id, cls:'mono'},
@@ -788,7 +886,7 @@ function renderAll() {
 
 function renderKpis() {
   const totalFuelR = STATE.results.fuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
-  const totalMaintR = STATE.results.maint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
+  const totalMaintR = STATE.results.maint.reduce((s,t)=>s+maintTotal(t),0);
   const elapsed = STATE.finishedAt ? ((STATE.finishedAt-STATE.startedAt)/1000).toFixed(1) : '—';
   // Q3: total de registros com campos críticos faltando (data, placa, mercante, produto)
   const dq = STATE.dataQuality;
@@ -1044,7 +1142,7 @@ function openPlateBanner(plate, tabKey) {
 
   // Totais
   const totalFuelR = allFuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
-  const totalMaintR = allMaint.reduce((s,t)=>s+(t.products||[]).reduce((a,p)=>a+scaled(p.total_value),0),0);
+  const totalMaintR = allMaint.reduce((s,t)=>s+maintTotal(t),0);
   const totalLitros = allFuel.reduce((s,t)=>s+(t.product||[]).reduce((a,p)=>a+nz(p.quantity),0),0);
   const totalR = totalFuelR + totalMaintR;
   const precoMedioL = totalLitros>0 ? totalFuelR/totalLitros : 0;
@@ -1074,7 +1172,7 @@ function openPlateBanner(plate, tabKey) {
   });
   allMaint.forEach(t => {
     const nm = t.merchant?.name; if (!nm) return;
-    const total = (t.products||[]).reduce((a,p)=>a+scaled(p.total_value),0);
+    const total = maintTotal(t);
     const cur = merchantsMap.get(nm) || {count:0, total:0, type:'oficina'};
     cur.count++; cur.total += total;
     merchantsMap.set(nm, cur);
@@ -1216,10 +1314,10 @@ const MAINT_BANNER_COLS = [
   {k:'nfp', t:'NF Peças',       val:r=>r.invoice?.product_invoice_number||'', cls:'mono'},
   {k:'nfs', t:'NF Serv.',       val:r=>r.invoice?.service_invoice_number||'', cls:'mono'},
   {k:'items', t:'Itens',        val:r=>(r.products||[]).length, cls:'num', sortNum:r=>(r.products||[]).length},
-  {k:'total', t:'Total R$',     val:r=>(r.products||[]).reduce((s,p)=>s+scaled(p?.total_value),0), render:(r,v)=>fmtBRL(v), cls:'num', sortNum:r=>(r.products||[]).reduce((s,p)=>s+scaled(p?.total_value),0)},
-  {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number||'', cls:'mono'},
-  {k:'process', t:'Processo',   val:r=>r.purchase_order?.process_number||'', cls:'mono'},
-  {k:'unit_name', t:'Unidade',  val:r=>r.unit?.name||''},
+  {k:'total', t:'Total R$',     val:r=>maintTotal(r), render:(r,v)=>fmtBRL(v), cls:'num', sortNum:r=>maintTotal(r)},
+  {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
+  {k:'process', t:'Processo',   val:r=>r.purchase_order?.process_number||r.process_number||'', cls:'mono'},
+  {k:'unit_name', t:'Unidade',  val:r=>maintUnit(r)},
 ];
 
 // Estado por tabela: {tableId: {sortCol, sortDir, filters: {colKey: Set<value>}}}
