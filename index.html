@@ -385,7 +385,8 @@ const STATE = {
   startedAt: null, finishedAt: null,
   activeTab: 'fuel',
   // Qualidade de dados: contadores incrementados por ingestSuccess quando campos críticos faltam
-  dataQuality: { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0 },
+  // Trackeio separado de empenho/processo só pra manutenção pois fuel sempre tem
+  dataQuality: { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0, maintMissingEmpenho:0, maintMissingProcesso:0, maintTotal:0 },
   tabState: {
     fuel:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
     maint:     { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
@@ -627,6 +628,13 @@ function ingestSuccess(item, json) {
       if (!merchant) STATE.dataQuality.missingMerchant++;
       if (!dateField) STATE.dataQuality.missingDate++;
       if (!productOk) STATE.dataQuality.missingProduct++;
+      // Tracking específico de manutenção: empenho/processo (fuel sempre tem)
+      if (item.ep === 'maint') {
+        STATE.dataQuality.maintTotal++;
+        if (!maintCommitment(t)) STATE.dataQuality.maintMissingEmpenho++;
+        const proc = t.purchase_order?.process_number || t.process_number || '';
+        if (!proc) STATE.dataQuality.maintMissingProcesso++;
+      }
     });
     bumpCounter('tx', txs.length);
   }
@@ -690,7 +698,7 @@ async function runExtract(retryOnly=false) {
     STATE.results = { fuel:[], maint:[] };
     STATE.errors = [];
     STATE.failedItems = [];
-    STATE.dataQuality = { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0 };
+    STATE.dataQuality = { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0, maintMissingEmpenho:0, maintMissingProcesso:0, maintTotal:0 };
     STATE.startedAt = Date.now();
     $('#log').innerHTML = '';
     ['done','ok','403','404','500','retries','tx'].forEach(k => $(`#ps-${k}`).textContent='0');
@@ -900,6 +908,11 @@ function renderKpis() {
   const dq = STATE.dataQuality;
   const dqTotal = dq.missingPlate + dq.missingMerchant + dq.missingProduct + dq.missingDate;
   const dqSub = dqTotal === 0 ? 'todos campos OK' : `placa:${dq.missingPlate} · merc:${dq.missingMerchant} · prod:${dq.missingProduct} · data:${dq.missingDate}`;
+  // Cobertura específica de empenho/processo em manutenções (Vólus pode retornar null)
+  const empCovered = dq.maintTotal - dq.maintMissingEmpenho;
+  const procCovered = dq.maintTotal - dq.maintMissingProcesso;
+  const empPct = dq.maintTotal > 0 ? Math.round(empCovered*100/dq.maintTotal) : 0;
+  const procPct = dq.maintTotal > 0 ? Math.round(procCovered*100/dq.maintTotal) : 0;
   const items = [
     {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:fmtBRL(totalFuelR), cls: STATE.results.fuel.length>0?'ok':''},
     {label:'Manutenções', value:STATE.results.maint.length.toLocaleString('pt-BR'), sub:fmtBRL(totalMaintR), cls: STATE.results.maint.length>0?'ok':''},
@@ -909,6 +922,19 @@ function renderKpis() {
     {label:'Tempo', value:`${elapsed}s`, sub:'última extração'},
     // Tile só aparece se houver issue de qualidade (dqTotal > 0)
     ...(dqTotal > 0 ? [{label:'Qualidade ⚠️', value:dqTotal.toLocaleString('pt-BR'), sub:dqSub, cls:'warn'}] : []),
+    // Cobertura de empenho/processo em manutenções (mostra sempre que há maint, mesmo 100%)
+    ...(dq.maintTotal > 0 ? [{
+      label: 'Empenho · Manut.',
+      value: `${empPct}%`,
+      sub: `${empCovered.toLocaleString('pt-BR')}/${dq.maintTotal.toLocaleString('pt-BR')} com empenho · ${dq.maintMissingEmpenho.toLocaleString('pt-BR')} null`,
+      cls: empPct < 50 ? 'err' : (empPct < 90 ? 'warn' : 'ok')
+    }] : []),
+    ...(dq.maintTotal > 0 ? [{
+      label: 'Processo · Manut.',
+      value: `${procPct}%`,
+      sub: `${procCovered.toLocaleString('pt-BR')}/${dq.maintTotal.toLocaleString('pt-BR')} com processo · ${dq.maintMissingProcesso.toLocaleString('pt-BR')} null`,
+      cls: procPct < 50 ? 'err' : (procPct < 90 ? 'warn' : 'ok')
+    }] : []),
   ];
   const k = $('#kpi-grid'); k.innerHTML='';
   items.forEach(i => {
