@@ -562,6 +562,17 @@ function ingestSuccess(item, json) {
   const txs = data.transactions || [];
   if (Array.isArray(txs)) {
     const target = STATE.results[item.ep];
+    // DIAGNÓSTICO: loga a 1ª transação de cada endpoint pra inspecionar shape real
+    if (target.length === 0 && txs.length > 0) {
+      console.group(`🔬 SHAPE da 1ª transação · ${item.ep} · ${item.company?.name||''}`);
+      console.log('Keys da resposta:', Object.keys(json), '| keys data:', Object.keys(data));
+      console.log('Tx[0] keys:', Object.keys(txs[0]));
+      console.log('Tx[0] sample:', txs[0]);
+      const pArr = txs[0].product || txs[0].products || [];
+      console.log(`product[]/products[] (${pArr.length}):`, pArr[0] || '(vazio)');
+      if (pArr[0]) console.log('Keys product[0]:', Object.keys(pArr[0]), '| total_value:', pArr[0].total_value, '| unit_price:', pArr[0].unit_price);
+      console.groupEnd();
+    }
     txs.forEach(t => {
       target.push({...t, _company:item.company});
       // Q3: Validação de campos críticos — incrementa contadores se algum estiver ausente
