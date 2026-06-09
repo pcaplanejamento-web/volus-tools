@@ -254,11 +254,11 @@ table.data .empty-state{padding:40px;text-align:center;color:var(--text-mute)}
       <label>até</label>
       <input id="cfg-end" type="date" />
     </div>
-    <div class="field-inline" title="Vólus parece retornar valores em centavos (100× maior). Divida por 100 pra ver em Reais.">
+    <div class="field-inline" title="API Vólus hoje retorna valores em REAIS direto (raw). Mantenha em ×1. Use ÷100 só se Vólus reverter pra centavos.">
       <label>Escala R$</label>
       <select id="cfg-scale" style="padding:5px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-family:var(--mono);font-size:12px;color:var(--text)">
-        <option value="100" selected>÷ 100 (real)</option>
-        <option value="1">× 1 (cru)</option>
+        <option value="1" selected>× 1 (real · default)</option>
+        <option value="100">÷ 100 (legacy centavos)</option>
       </select>
     </div>
     <span class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-text">Iniciando…</span></span>
@@ -410,9 +410,11 @@ const toast = (msg, kind='') => {
 };
 const escapeHtml = s => String(s==null?'':s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const nz = v => +v || 0;
-// Escala monetária: Vólus retorna valores em centavos (descoberto 29/05/2026)
-// Default ÷100. User pode alternar pra ver valores crus (×1) no select do topbar.
-const getScale = () => +($('#cfg-scale')?.value) || 100;
+// Escala monetária (atualizado 09/06/2026):
+// Vólus mudou a API de centavos → REAIS entre 02/06 e 09/06.
+// Default agora é ×1 (raw). Toggle pra ÷100 fica como fallback caso revertam.
+// Detectado via qty × unit_price = total_value em todas as amostras (40k+25k+2k tx).
+const getScale = () => +($('#cfg-scale')?.value) || 1;
 const scaled = v => nz(v) / getScale();
 const fmtBRL = n => (n==null||isNaN(+n)) ? '—' : (+n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const fmtNum = (n, d=2) => (n==null||isNaN(+n)) ? '—' : (+n).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
