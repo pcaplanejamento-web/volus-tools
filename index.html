@@ -379,7 +379,9 @@ const STATE = {
   token: null,
   companies: [],
   scope: [],
-  results: { fuel: [], maint: [] },
+  // fuel/maint = transações agregadas (1 linha por ordem/abastecimento)
+  // fuel_items/maint_items = itens individuais expandidos (1 linha por produto/serviço)
+  results: { fuel: [], maint: [], fuel_items: [], maint_items: [] },
   errors: [],
   failedItems: [],
   startedAt: null, finishedAt: null,
@@ -388,10 +390,12 @@ const STATE = {
   // Trackeio separado de empenho/processo só pra manutenção pois fuel sempre tem
   dataQuality: { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0, maintMissingEmpenho:0, maintMissingProcesso:0, maintTotal:0 },
   tabState: {
-    fuel:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    maint:     { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    empresas:  { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    errors:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    fuel:        { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    maint:       { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    fuel_items:  { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    maint_items: { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    empresas:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    errors:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
   },
 };
 
@@ -619,6 +623,52 @@ function ingestSuccess(item, json) {
     }
     txs.forEach(t => {
       target.push({...t, _company:item.company});
+      // ITENS EXPANDIDOS — explode product[]/products[] em linhas individuais
+      if (item.ep === 'fuel') {
+        (t.product || []).forEach((p, idx) => {
+          STATE.results.fuel_items.push({
+            // contexto da transação pai
+            _transaction_id: t.id,
+            _refuel_datetime: t.refuel_datetime,
+            _line_no: idx + 1,
+            _items_count: (t.product || []).length,
+            _company: item.company,
+            // herdados da transação
+            card: t.card,
+            operator: t.operator,
+            merchant: t.merchant,
+            purchase_order: t.purchase_order,
+            unit: t.unit,
+            accumulated_distance: t.accumulated_distance,
+            distance_traveled: t.distance_traveled,
+            average_consumption: t.average_consumption,
+            fiscal_document: t.fiscal_document,
+            // o item em si (name, quantity, unit_price, total_value)
+            ...p,
+          });
+        });
+      } else if (item.ep === 'maint') {
+        (t.products || []).forEach((p, idx) => {
+          STATE.results.maint_items.push({
+            // contexto da ordem pai
+            _order_id: t.order_id,
+            _transaction_datetime: t.transaction_datetime,
+            _line_no: idx + 1,
+            _items_count: (t.products || []).length,
+            _company: item.company,
+            // herdados
+            card: t.card,
+            operator: t.operator,
+            merchant: t.merchant,
+            purchase_order: t.purchase_order,
+            unit: t.unit,
+            maintenance_context: t.maintenance_context,
+            invoice: t.invoice,
+            // o item (description, category, item_type, quantity, unit_price, total_price)
+            ...p,
+          });
+        });
+      }
       // Q3: Validação de campos críticos — incrementa contadores se algum estiver ausente
       const plate = t.card?.plate || t.card?.prefix;
       const merchant = t.merchant?.name;
@@ -695,7 +745,7 @@ async function runExtract(retryOnly=false) {
       const ok = await authenticate();
       if (!ok) { $('#btn-extract').disabled = false; $('#btn-extract').textContent='🔄 Extrair tudo'; return; }
     }
-    STATE.results = { fuel:[], maint:[] };
+    STATE.results = { fuel:[], maint:[], fuel_items:[], maint_items:[] };
     STATE.errors = [];
     STATE.failedItems = [];
     STATE.dataQuality = { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0, maintMissingEmpenho:0, maintMissingProcesso:0, maintTotal:0 };
@@ -854,6 +904,48 @@ const COLS = {
     {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
     {k:'unit', t:'Unidade', val:r=>maintUnit(r)},
   ],
+  // ============ ITENS COMBUSTÍVEL — 1 linha por produto/transação ============
+  fuel_items: [
+    {k:'_date', t:'Data', val:r=>r._refuel_datetime?new Date(r._refuel_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r._refuel_datetime?new Date(r._refuel_datetime).getTime():0, render:r=>fmtDate(r._refuel_datetime), cls:'mono'},
+    {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'', cls:'strong'},
+    {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono strong'},
+    {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
+    {k:'operator', t:'Operador', val:r=>r.operator?.name},
+    {k:'merchant', t:'Posto', val:r=>r.merchant?.name, cls:'strong'},
+    {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
+    {k:'name', t:'Produto', val:r=>r.name, cls:'strong'},
+    {k:'qty', t:'Qtd', val:r=>nz(r.quantity), render:r=>r.quantity?fmtNum(nz(r.quantity),3):'—', cls:'num'},
+    {k:'unit_price', t:'R$/un', val:r=>scaled(r.unit_price), render:r=>fmtBRL(scaled(r.unit_price)), cls:'num'},
+    {k:'total', t:'Total', val:r=>scaled(r.total_value), render:r=>fmtBRL(scaled(r.total_value)), cls:'num', total:true},
+    {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
+    {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
+    {k:'unit_name', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
+    {k:'_transaction_id', t:'ID Transação', val:r=>r._transaction_id, cls:'mono'},
+  ],
+  // ============ ITENS MANUTENÇÃO — 1 linha por peça/serviço da ordem ============
+  // Valores em REAIS (não scaled — Vólus envia total_price já em reais)
+  maint_items: [
+    {k:'_date', t:'Data', val:r=>r._transaction_datetime?new Date(r._transaction_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r._transaction_datetime?new Date(r._transaction_datetime).getTime():0, render:r=>fmtDate(r._transaction_datetime), cls:'mono'},
+    {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'', cls:'strong'},
+    {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono strong'},
+    {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
+    {k:'operator', t:'Operador', val:r=>r.operator?.name},
+    {k:'merchant', t:'Oficina', val:r=>r.merchant?.name, cls:'strong'},
+    {k:'description', t:'Descrição', val:r=>r.description, cls:'strong'},
+    {k:'category', t:'Categoria', val:r=>r.category?.name, render:r=>r.category?.name?`<span class="pill mute">${escapeHtml(r.category.name)}</span>`:'—'},
+    {k:'item_type', t:'Tipo', val:r=>r.item_type?.description, render:r=>{const t=r.item_type?.description;if(!t)return '—';const cls=t==='PECA'?'ok':'mute';return `<span class="pill ${cls}">${escapeHtml(t)}</span>`;}},
+    {k:'qty', t:'Qtd', val:r=>nz(r.quantity), render:r=>fmtNum(nz(r.quantity),2), cls:'num'},
+    // unit_price e total_price em REAIS — não scaled
+    {k:'unit_price', t:'R$/un', val:r=>nz(r.unit_price), render:r=>fmtBRL(nz(r.unit_price)), cls:'num'},
+    {k:'total', t:'Total', val:r=>nz(r.total_price), render:r=>fmtBRL(nz(r.total_price)), cls:'num', total:true},
+    {k:'mtype', t:'Manut.', val:r=>r.maintenance_context?.maintenance_type, render:r=>r.maintenance_context?.maintenance_type?`<span class="pill mute">${escapeHtml(r.maintenance_context.maintenance_type)}</span>`:'—'},
+    {k:'nfp', t:'NF Peças', val:r=>r.invoice?.product_invoice_number, cls:'mono'},
+    {k:'nfs', t:'NF Serv', val:r=>r.invoice?.service_invoice_number, cls:'mono'},
+    {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
+    {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
+    {k:'unit_name', t:'Unidade', val:r=>maintUnit(r)},
+    {k:'_order_id', t:'Order ID', val:r=>r._order_id, cls:'mono'},
+  ],
   empresas: [
     {k:'id', t:'ID', val:r=>r.id, cls:'mono'},
     {k:'cc', t:'client_code', val:r=>(r.id||'').slice(0,6), cls:'mono'},
@@ -874,18 +966,22 @@ const COLS = {
 };
 
 const TABS = [
-  {k:'fuel', label:'Combustível'},
-  {k:'maint', label:'Manutenção'},
-  {k:'empresas', label:'Empresas'},
-  {k:'errors', label:'Erros', isErr:true},
+  {k:'fuel',        label:'Combustível'},
+  {k:'fuel_items',  label:'Itens Comb.'},
+  {k:'maint',       label:'Manutenção'},
+  {k:'maint_items', label:'Itens Manut.'},
+  {k:'empresas',    label:'Empresas'},
+  {k:'errors',      label:'Erros', isErr:true},
 ];
 
 function dataFor(tabKey) {
   switch(tabKey) {
-    case 'fuel': return STATE.results.fuel;
-    case 'maint': return STATE.results.maint;
-    case 'empresas': return STATE.companies;
-    case 'errors': return STATE.errors;
+    case 'fuel':        return STATE.results.fuel;
+    case 'fuel_items':  return STATE.results.fuel_items;
+    case 'maint':       return STATE.results.maint;
+    case 'maint_items': return STATE.results.maint_items;
+    case 'empresas':    return STATE.companies;
+    case 'errors':      return STATE.errors;
   }
   return [];
 }
@@ -914,8 +1010,8 @@ function renderKpis() {
   const empPct = dq.maintTotal > 0 ? Math.round(empCovered*100/dq.maintTotal) : 0;
   const procPct = dq.maintTotal > 0 ? Math.round(procCovered*100/dq.maintTotal) : 0;
   const items = [
-    {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:fmtBRL(totalFuelR), cls: STATE.results.fuel.length>0?'ok':''},
-    {label:'Manutenções', value:STATE.results.maint.length.toLocaleString('pt-BR'), sub:fmtBRL(totalMaintR), cls: STATE.results.maint.length>0?'ok':''},
+    {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:`${STATE.results.fuel_items.length.toLocaleString('pt-BR')} itens · ${fmtBRL(totalFuelR)}`, cls: STATE.results.fuel.length>0?'ok':''},
+    {label:'Manutenções', value:STATE.results.maint.length.toLocaleString('pt-BR'), sub:`${STATE.results.maint_items.length.toLocaleString('pt-BR')} itens · ${fmtBRL(totalMaintR)}`, cls: STATE.results.maint.length>0?'ok':''},
     {label:'Empresas', value:STATE.companies.length, sub:'autorizadas'},
     {label:'Total R$', value:fmtBRL(totalFuelR+totalMaintR), sub:'consolidado'},
     {label:'Erros', value:STATE.errors.length.toLocaleString('pt-BR'), sub:STATE.errors.length===0?'sem falhas':'requests falhadas', cls: STATE.errors.length>0?'err':'ok'},
@@ -1092,7 +1188,7 @@ function renderTable(tabKey) {
 
   // Body
   const tbody = document.createElement('tbody');
-  const supportsPlateDetail = ['fuel','maint'].includes(tabKey);
+  const supportsPlateDetail = ['fuel','maint','fuel_items','maint_items'].includes(tabKey);
   pageRows.forEach(r => {
     const tr = document.createElement('tr');
     cols.forEach(c => {

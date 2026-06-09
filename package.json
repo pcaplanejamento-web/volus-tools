@@ -1,0 +1,6 @@
+{
+  "name": "volus-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Ferramentas de integração API Vólus para PMRV"
+}
