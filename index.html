@@ -390,12 +390,10 @@ const STATE = {
   // Trackeio separado de empenho/processo só pra manutenção pois fuel sempre tem
   dataQuality: { missingPlate:0, missingMerchant:0, missingProduct:0, missingDate:0, maintMissingEmpenho:0, maintMissingProcesso:0, maintTotal:0 },
   tabState: {
-    fuel:        { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    maint:       { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    fuel_items:  { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    maint_items: { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    empresas:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
-    errors:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    fuel:      { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    maint:     { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    empresas:  { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
+    errors:    { filter:'', sortCol:null, sortDir:1, page:0, pageSize:50 },
   },
 };
 
@@ -867,9 +865,13 @@ function maintUnit(r) {
 }
 
 // ============== RENDER ==============
+// 2026-06-09: tabs principais (fuel/maint) mostram ITENS individuais
+// Valores fuel ainda passam por scaled() (legacy centavos quando Vólus reverte)
+// Valores maint vêm em REAIS direto (Vólus 2026-06 não envia mais centavos pra maint)
 const COLS = {
+  // ============ COMBUSTÍVEL — 1 linha por produto da transação ============
   fuel: [
-    {k:'_date', t:'Data', val:r=>r.refuel_datetime?new Date(r.refuel_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r.refuel_datetime?new Date(r.refuel_datetime).getTime():0, render:r=>fmtDate(r.refuel_datetime), cls:'mono'},
+    {k:'_date', t:'Data', val:r=>r._refuel_datetime?new Date(r._refuel_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r._refuel_datetime?new Date(r._refuel_datetime).getTime():0, render:r=>fmtDate(r._refuel_datetime), cls:'mono'},
     {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'', cls:'strong'},
     {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono strong'},
     {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
@@ -877,79 +879,41 @@ const COLS = {
     {k:'operator', t:'Operador', val:r=>r.operator?.name},
     {k:'merchant', t:'Posto', val:r=>r.merchant?.name, cls:'strong'},
     {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
-    {k:'product', t:'Produto', val:r=>(r.product||[]).map(p=>p?.name).filter(Boolean).join(', ')},
-    {k:'qty', t:'Qtd', val:r=>(r.product||[]).reduce((s,p)=>s+nz(p.quantity),0), render:r=>{const q=(r.product||[]).reduce((s,p)=>s+nz(p.quantity),0); return q?fmtNum(q,3):'—';}, cls:'num'},
-    // Q2: R$/un = média ponderada quando há multi-produto (totalValor / totalQty). Tooltip mostra detalhe se houver mais de 1.
-    {k:'unit_price', t:'R$/un', val:r=>{const ps=(r.product||[]);const tq=ps.reduce((s,p)=>s+nz(p.quantity),0);const tv=ps.reduce((s,p)=>s+scaled(p.total_value),0);return tq>0?tv/tq:0;}, render:r=>{const ps=(r.product||[]);if(!ps.length)return '—';const tq=ps.reduce((s,p)=>s+nz(p.quantity),0);const tv=ps.reduce((s,p)=>s+scaled(p.total_value),0);if(tq<=0)return '—';const avg=tv/tq;const tip=ps.length>1?`${ps.length} produtos: ${ps.map(p=>`${p.name||'?'}=${fmtBRL(scaled(p.unit_price))}`).join(' · ')}`:'';return tip?`<span title="${escapeHtml(tip)}">${fmtBRL(avg)}${ps.length>1?` <small style="opacity:.5">×${ps.length}</small>`:''}</span>`:fmtBRL(avg);}, cls:'num'},
-    {k:'total', t:'Total', val:r=>(r.product||[]).reduce((s,p)=>s+scaled(p.total_value),0), render:r=>fmtBRL((r.product||[]).reduce((s,p)=>s+scaled(p.total_value),0)), cls:'num', total:true},
-    {k:'distance', t:'Hodômetro', val:r=>r.accumulated_distance, render:r=>r.accumulated_distance?`${r.accumulated_distance} km`:'—', cls:'mono'},
-    {k:'consumption', t:'Média', val:r=>r.average_consumption, render:r=>r.average_consumption||'—', cls:'mono'},
-    {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
-    {k:'unit', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
-  ],
-  maint: [
-    {k:'_date', t:'Data', val:r=>r.transaction_datetime?new Date(r.transaction_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r.transaction_datetime?new Date(r.transaction_datetime).getTime():0, render:r=>fmtDate(r.transaction_datetime), cls:'mono'},
-    {k:'order_id', t:'Ordem', val:r=>r.order_id, cls:'mono strong'},
-    {k:'_empresa', t:'Empresa', val:r=>r._company?.name||''},
-    {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono'},
-    {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
-    {k:'operator', t:'Operador', val:r=>r.operator?.name},
-    {k:'merchant', t:'Oficina', val:r=>r.merchant?.name, cls:'strong'},
-    {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
-    {k:'mtype', t:'Tipo', val:r=>r.maintenance_context?.maintenance_type, render:r=>r.maintenance_context?.maintenance_type?`<span class="pill mute">${escapeHtml(r.maintenance_context.maintenance_type)}</span>`:'—'},
-    {k:'usage', t:'Hodômetro', val:r=>r.maintenance_context?.usage_metric, cls:'mono'},
-    {k:'nfp', t:'NF Peças', val:r=>r.invoice?.product_invoice_number, cls:'mono'},
-    {k:'nfs', t:'NF Serv', val:r=>r.invoice?.service_invoice_number, cls:'mono'},
-    // Q2-fix: autodetect path do total (Vólus pode mandar em products[].total_value, cost, ou invoice.*)
-    {k:'total', t:'Total', val:r=>maintTotal(r), render:r=>fmtBRL(maintTotal(r)), cls:'num', total:true},
-    {k:'items', t:'Itens', val:r=>(r.products||[]).length, cls:'num'},
-    // Vólus 2026-06-09: purchase_orders virou array — helpers fazem o join
-    {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
-    {k:'process', t:'Processo', val:r=>maintProcess(r), cls:'mono'},
-    {k:'unit', t:'Unidade', val:r=>maintUnit(r)},
-  ],
-  // ============ ITENS COMBUSTÍVEL — 1 linha por produto/transação ============
-  fuel_items: [
-    {k:'_date', t:'Data', val:r=>r._refuel_datetime?new Date(r._refuel_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r._refuel_datetime?new Date(r._refuel_datetime).getTime():0, render:r=>fmtDate(r._refuel_datetime), cls:'mono'},
-    {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'', cls:'strong'},
-    {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono strong'},
-    {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
-    {k:'operator', t:'Operador', val:r=>r.operator?.name},
-    {k:'merchant', t:'Posto', val:r=>r.merchant?.name, cls:'strong'},
-    {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
     {k:'name', t:'Produto', val:r=>r.name, cls:'strong'},
     {k:'qty', t:'Qtd', val:r=>nz(r.quantity), render:r=>r.quantity?fmtNum(nz(r.quantity),3):'—', cls:'num'},
     {k:'unit_price', t:'R$/un', val:r=>scaled(r.unit_price), render:r=>fmtBRL(scaled(r.unit_price)), cls:'num'},
     {k:'total', t:'Total', val:r=>scaled(r.total_value), render:r=>fmtBRL(scaled(r.total_value)), cls:'num', total:true},
-    {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
+    {k:'distance', t:'Hodômetro', val:r=>r.accumulated_distance, render:r=>r.accumulated_distance?`${r.accumulated_distance} km`:'—', cls:'mono'},
+    {k:'consumption', t:'Média', val:r=>r.average_consumption, render:r=>r.average_consumption||'—', cls:'mono'},
     {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
+    {k:'process', t:'Processo', val:r=>r.purchase_order?.process_number, cls:'mono'},
     {k:'unit_name', t:'Unidade', val:r=>r.unit?.name||r.unit?.code},
+    {k:'line_no', t:'Item', val:r=>r._items_count>1?`${r._line_no}/${r._items_count}`:'—', cls:'mono num'},
     {k:'_transaction_id', t:'ID Transação', val:r=>r._transaction_id, cls:'mono'},
   ],
-  // ============ ITENS MANUTENÇÃO — 1 linha por peça/serviço da ordem ============
-  // Valores em REAIS (não scaled — Vólus envia total_price já em reais)
-  maint_items: [
+  // ============ MANUTENÇÃO — 1 linha por peça/serviço da ordem ============
+  // Vólus envia values em REAIS · purchase_orders virou array (2026-06-09)
+  maint: [
     {k:'_date', t:'Data', val:r=>r._transaction_datetime?new Date(r._transaction_datetime).toLocaleDateString('pt-BR'):'', sortVal:r=>r._transaction_datetime?new Date(r._transaction_datetime).getTime():0, render:r=>fmtDate(r._transaction_datetime), cls:'mono'},
     {k:'_empresa', t:'Empresa', val:r=>r._company?.name||'', cls:'strong'},
     {k:'plate', t:'Placa', val:r=>r.card?.plate||r.card?.prefix, cls:'mono strong'},
     {k:'vehicle', t:'Veículo', val:r=>[r.card?.brand_name,r.card?.model_name].filter(Boolean).join(' ')},
     {k:'operator', t:'Operador', val:r=>r.operator?.name},
     {k:'merchant', t:'Oficina', val:r=>r.merchant?.name, cls:'strong'},
+    {k:'city', t:'Cidade/UF', val:r=>[r.merchant?.address?.city,r.merchant?.address?.state].filter(Boolean).join('/')},
     {k:'description', t:'Descrição', val:r=>r.description, cls:'strong'},
     {k:'category', t:'Categoria', val:r=>r.category?.name, render:r=>r.category?.name?`<span class="pill mute">${escapeHtml(r.category.name)}</span>`:'—'},
     {k:'item_type', t:'Tipo', val:r=>r.item_type?.description, render:r=>{const t=r.item_type?.description;if(!t)return '—';const cls=t==='PECA'?'ok':'mute';return `<span class="pill ${cls}">${escapeHtml(t)}</span>`;}},
     {k:'qty', t:'Qtd', val:r=>nz(r.quantity), render:r=>fmtNum(nz(r.quantity),2), cls:'num'},
-    // unit_price e total_price em REAIS — não scaled
     {k:'unit_price', t:'R$/un', val:r=>nz(r.unit_price), render:r=>fmtBRL(nz(r.unit_price)), cls:'num'},
     {k:'total', t:'Total', val:r=>nz(r.total_price), render:r=>fmtBRL(nz(r.total_price)), cls:'num', total:true},
     {k:'mtype', t:'Manut.', val:r=>r.maintenance_context?.maintenance_type, render:r=>r.maintenance_context?.maintenance_type?`<span class="pill mute">${escapeHtml(r.maintenance_context.maintenance_type)}</span>`:'—'},
     {k:'nfp', t:'NF Peças', val:r=>r.invoice?.product_invoice_number, cls:'mono'},
     {k:'nfs', t:'NF Serv', val:r=>r.invoice?.service_invoice_number, cls:'mono'},
-    {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
-    // Vólus 2026-06-09: purchase_orders virou array — usa helper maintCommitment
     {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
     {k:'process', t:'Processo', val:r=>maintProcess(r), cls:'mono'},
     {k:'unit_name', t:'Unidade', val:r=>maintUnit(r)},
+    {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
     {k:'_order_id', t:'Order ID', val:r=>r._order_id, cls:'mono'},
   ],
   empresas: [
@@ -972,22 +936,20 @@ const COLS = {
 };
 
 const TABS = [
-  {k:'fuel',        label:'Combustível'},
-  {k:'fuel_items',  label:'Itens Comb.'},
-  {k:'maint',       label:'Manutenção'},
-  {k:'maint_items', label:'Itens Manut.'},
-  {k:'empresas',    label:'Empresas'},
-  {k:'errors',      label:'Erros', isErr:true},
+  {k:'fuel',      label:'Combustível'},
+  {k:'maint',     label:'Manutenção'},
+  {k:'empresas',  label:'Empresas'},
+  {k:'errors',    label:'Erros', isErr:true},
 ];
 
+// 2026-06-09: tabs principais mostram ITENS (1 linha por produto/peça/serviço)
+// Banner/click ainda usa STATE.results.fuel|maint (transações agregadas) pra cruzar placa
 function dataFor(tabKey) {
   switch(tabKey) {
-    case 'fuel':        return STATE.results.fuel;
-    case 'fuel_items':  return STATE.results.fuel_items;
-    case 'maint':       return STATE.results.maint;
-    case 'maint_items': return STATE.results.maint_items;
-    case 'empresas':    return STATE.companies;
-    case 'errors':      return STATE.errors;
+    case 'fuel':     return STATE.results.fuel_items;
+    case 'maint':    return STATE.results.maint_items;
+    case 'empresas': return STATE.companies;
+    case 'errors':   return STATE.errors;
   }
   return [];
 }
@@ -1016,8 +978,8 @@ function renderKpis() {
   const empPct = dq.maintTotal > 0 ? Math.round(empCovered*100/dq.maintTotal) : 0;
   const procPct = dq.maintTotal > 0 ? Math.round(procCovered*100/dq.maintTotal) : 0;
   const items = [
-    {label:'Abastecimentos', value:STATE.results.fuel.length.toLocaleString('pt-BR'), sub:`${STATE.results.fuel_items.length.toLocaleString('pt-BR')} itens · ${fmtBRL(totalFuelR)}`, cls: STATE.results.fuel.length>0?'ok':''},
-    {label:'Manutenções', value:STATE.results.maint.length.toLocaleString('pt-BR'), sub:`${STATE.results.maint_items.length.toLocaleString('pt-BR')} itens · ${fmtBRL(totalMaintR)}`, cls: STATE.results.maint.length>0?'ok':''},
+    {label:'Combustível', value:STATE.results.fuel_items.length.toLocaleString('pt-BR'), sub:`${STATE.results.fuel.length.toLocaleString('pt-BR')} abastecimentos · ${fmtBRL(totalFuelR)}`, cls: STATE.results.fuel_items.length>0?'ok':''},
+    {label:'Manutenção', value:STATE.results.maint_items.length.toLocaleString('pt-BR'), sub:`${STATE.results.maint.length.toLocaleString('pt-BR')} ordens · ${fmtBRL(totalMaintR)}`, cls: STATE.results.maint_items.length>0?'ok':''},
     {label:'Empresas', value:STATE.companies.length, sub:'autorizadas'},
     {label:'Total R$', value:fmtBRL(totalFuelR+totalMaintR), sub:'consolidado'},
     {label:'Erros', value:STATE.errors.length.toLocaleString('pt-BR'), sub:STATE.errors.length===0?'sem falhas':'requests falhadas', cls: STATE.errors.length>0?'err':'ok'},
