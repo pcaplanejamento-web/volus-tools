@@ -658,11 +658,12 @@ function ingestSuccess(item, json) {
             _line_no: idx + 1,
             _items_count: (t.products || []).length,
             _company: item.company,
-            // herdados
+            // herdados (purchase_orders é array plural a partir de 2026-06-09)
             card: t.card,
             operator: t.operator,
             merchant: t.merchant,
-            purchase_order: t.purchase_order,
+            purchase_orders: t.purchase_orders,   // novo schema array
+            purchase_order: t.purchase_order,     // legacy fallback
             unit: t.unit,
             maintenance_context: t.maintenance_context,
             invoice: t.invoice,
@@ -902,8 +903,9 @@ const COLS = {
     // Q2-fix: autodetect path do total (Vólus pode mandar em products[].total_value, cost, ou invoice.*)
     {k:'total', t:'Total', val:r=>maintTotal(r), render:r=>fmtBRL(maintTotal(r)), cls:'num', total:true},
     {k:'items', t:'Itens', val:r=>(r.products||[]).length, cls:'num'},
-    // Autodetect empenho/unidade — testa múltiplos paths
+    // Vólus 2026-06-09: purchase_orders virou array — helpers fazem o join
     {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
+    {k:'process', t:'Processo', val:r=>maintProcess(r), cls:'mono'},
     {k:'unit', t:'Unidade', val:r=>maintUnit(r)},
   ],
   // ============ ITENS COMBUSTÍVEL — 1 linha por produto/transação ============
@@ -944,7 +946,9 @@ const COLS = {
     {k:'nfp', t:'NF Peças', val:r=>r.invoice?.product_invoice_number, cls:'mono'},
     {k:'nfs', t:'NF Serv', val:r=>r.invoice?.service_invoice_number, cls:'mono'},
     {k:'line_no', t:'Item', val:r=>`${r._line_no}/${r._items_count}`, cls:'mono num'},
-    {k:'commitment', t:'Empenho', val:r=>r.purchase_order?.commitment_number, cls:'mono'},
+    // Vólus 2026-06-09: purchase_orders virou array — usa helper maintCommitment
+    {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
+    {k:'process', t:'Processo', val:r=>maintProcess(r), cls:'mono'},
     {k:'unit_name', t:'Unidade', val:r=>maintUnit(r)},
     {k:'_order_id', t:'Order ID', val:r=>r._order_id, cls:'mono'},
   ],
@@ -1448,7 +1452,7 @@ const MAINT_BANNER_COLS = [
   {k:'items', t:'Itens',        val:r=>(r.products||[]).length, cls:'num', sortNum:r=>(r.products||[]).length},
   {k:'total', t:'Total R$',     val:r=>maintTotal(r), render:(r,v)=>fmtBRL(v), cls:'num', sortNum:r=>maintTotal(r)},
   {k:'commitment', t:'Empenho', val:r=>maintCommitment(r), cls:'mono'},
-  {k:'process', t:'Processo',   val:r=>r.purchase_order?.process_number||r.process_number||'', cls:'mono'},
+  {k:'process', t:'Processo',   val:r=>maintProcess(r), cls:'mono'},
   {k:'unit_name', t:'Unidade',  val:r=>maintUnit(r)},
 ];
 
